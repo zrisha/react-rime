@@ -30,6 +30,7 @@
   ],
   "scripts": {
     "build": "tsup && cp src/assets/worker.js dist/worker.js",
+    "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
