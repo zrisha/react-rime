@@ -1,0 +1,115 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #1a1a1a;
+}
+
+.app {
+  max-width: 640px;
+  margin: 3rem auto;
+  padding: 0 1rem;
+}
+
+h1 {
+  margin-bottom: 0.25rem;
+}
+
+.sub {
+  color: #666;
+  margin-top: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.status {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.editor {
+  position: relative;
+}
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.preedit {
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.preedit .cursor {
+  color: #0066cc;
+  border-bottom: 2px solid #0066cc;
+}
+
+/* The library renders unstyled candidates with data attributes. */
+[data-rime-candidates] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+[data-rime-candidate] {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 2px 8px;
+  font-size: 1rem;
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+[data-rime-candidate][data-highlighted] {
+  background: #c8e6ff;
+}
+
+[data-rime-label] {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+[data-rime-comment] {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+[data-rime-page] {
+  margin-left: auto;
+  cursor: pointer;
+}
+
+.buffer {
+  margin-top: 1rem;
+  min-height: 2rem;
+  padding: 0.5rem;
+  background: #f7f7f7;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

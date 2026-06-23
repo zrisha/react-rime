@@ -4,3 +4,6 @@ dist
 .DS_Store
 *.log
 example/dist
+test-results
+playwright-report
+.vite

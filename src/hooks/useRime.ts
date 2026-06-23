@@ -99,10 +99,11 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
           return
         }
         created = e
+        // Full deploys emit this; prebuilt-schema startup does not. It marks the
+        // engine "deployed" (schema-name source) but is NOT the readiness gate.
         e.onDeployStatus((status) => {
           if (status === 'success') {
             control.setDeployed(true)
-            setReady(true)
           } else if (status === 'failure') {
             setError(new Error('react-rime: RIME deploy failed'))
           }
@@ -122,7 +123,9 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
   useEffect(() => {
     if (engine && !initedRef.current) {
       initedRef.current = true
-      control.selectIME(schema ?? control.schemaId)
+      // Ready once the initial schema is selected (prebuilt dicts fetched +
+      // schema active). This mirrors my_rime gating UI on `loading`, not deploy.
+      void control.selectIME(schema ?? control.schemaId).then(() => setReady(true))
     }
   }, [engine]) // eslint-disable-line react-hooks/exhaustive-deps
 
