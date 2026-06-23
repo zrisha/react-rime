@@ -25,47 +25,103 @@ export interface UseRimeOptions extends RimeEngineOptions, UseImeControlOptions 
   onCommit?: (committed: string) => void
 }
 
+/** Everything {@link useRime} returns. Each field shows its description on hover. */
 export interface UseRime {
-  // lifecycle
+  // --- lifecycle ---
+  /** `true` once the engine has loaded and the initial schema is active. */
   ready: boolean
+  /** `true` while the engine is busy (initial load or switching schema). */
   loading: boolean
+  /** Set if the worker/engine failed to load; otherwise `null`. */
   error: Error | null
-  // committed text buffer
+
+  // --- committed text buffer ---
+  /** The committed text (everything the user has confirmed). */
   text: string
+  /** Replace the committed text buffer. */
   setText: (value: string) => void
-  // composition state
+
+  // --- composition (in-progress input) ---
+  /** `true` while the user is mid-composition (a preedit is showing). */
   composing: boolean
+  /** The preedit string split into `{ head, body, tail }` around the cursor. */
   preedit: Preedit
+  /** Candidates for the current page: `{ text, comment? }`. */
   candidates: RimeCandidate[]
+  /** Index into {@link candidates} of the currently highlighted one. */
   highlighted: number
+  /** Selection labels (usually `"1"`–`"9"`) when the schema provides them. */
   selectLabels: string[] | undefined
+  /** Zero-based index of the current candidate page. */
   page: number
+  /** `true` when there are no more candidate pages after this one. */
   isLastPage: boolean
-  // input wiring
+
+  // --- input wiring ---
+  /** Attach to your `<textarea>`/`<input>` so commits insert at the caret. */
   inputRef: React.RefObject<HTMLTextAreaElement | HTMLInputElement | null>
+  /** Forward your element's `keydown` here to feed keystrokes to the engine. */
   onKeyDown: (e: AnyKeyboardEvent) => void
+  /** Forward your element's `keyup` here (needed for some key-release behavior). */
   onKeyUp: (e: AnyKeyboardEvent) => void
-  // candidate / page actions
+
+  // --- candidate / page actions ---
+  /** Commit the candidate at `index` on the current page. */
   selectCandidate: (index: number) => Promise<void>
+  /** Page through candidates; `true` goes back, `false` goes forward. */
   changePage: (backward: boolean) => Promise<void>
-  // schema & options (from useImeControl)
+
+  // --- schema & options ---
+  /** Id of the active input schema (e.g. `"luna_pinyin"`). */
   schema: string
+  /** Switch to a different schema by id. */
   setSchema: (id: string) => Promise<void>
+  /** Grouped options for building a schema `<select>`. */
   schemas: ReturnType<typeof useImeControl>['schemas']
+  /** Script variants available for the active schema (e.g. 简/繁). */
   variants: ReturnType<typeof useImeControl>['variants']
+  /** The currently active script variant. */
   variant: ReturnType<typeof useImeControl>['variant']
+  /** Cycle to the next script variant (e.g. toggle 简 ⇄ 繁). */
   changeVariant: () => Promise<void>
+  /** `true` when ASCII (English) mode is on. */
   isEnglish: boolean
+  /** Toggle ASCII (English) mode on/off. */
   changeLanguage: () => Promise<void>
+  /** `true` when full-width character mode is on. */
   isFullWidth: boolean
+  /** Toggle full-width vs. half-width characters. */
   changeWidth: () => Promise<void>
+  /** `true` when punctuation is in ASCII (English) form. */
   isEnglishPunctuation: boolean
+  /** Toggle ASCII vs. Chinese punctuation. */
   changePunctuation: () => Promise<void>
+  /** `true` when emoji suggestions are enabled. Persisted to localStorage. */
   enableEmoji: boolean
+  /** Toggle emoji suggestions on/off (the old my-rime emoji button). */
   changeEmoji: () => Promise<void>
+  /** Whether/which candidate comments the active schema hides (`false` | `'emoji'`). */
   hideComment: ReturnType<typeof useImeControl>['hideComment']
 }
 
+/**
+ * The primary hook. Creates and owns a RIME engine instance, runs the
+ * composition state machine, and exposes the committed-text buffer plus schema
+ * and option controls. The entire library is usable through the object it
+ * returns; the bundled components are optional conveniences on top of it.
+ *
+ * @example
+ * ```tsx
+ * const rime = useRime({ schema: 'luna_pinyin' })
+ * <textarea
+ *   ref={rime.inputRef as React.RefObject<HTMLTextAreaElement>}
+ *   value={rime.text}
+ *   onChange={(e) => rime.setText(e.target.value)}
+ *   onKeyDown={rime.onKeyDown}
+ *   onKeyUp={rime.onKeyUp}
+ * />
+ * ```
+ */
 export function useRime(options: UseRimeOptions = {}): UseRime {
   const { workerUrl, schema, defaultText, onCommit } = options
 
