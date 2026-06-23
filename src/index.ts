@@ -1,0 +1,48 @@
+// react-rime — headless React hooks for the RIME input-method engine.
+
+// Primary hook
+export { useRime } from './hooks/useRime'
+export type { UseRime, UseRimeOptions } from './hooks/useRime'
+
+// Focused hooks (advanced)
+export { useImeControl } from './hooks/useImeControl'
+export type { ImeControl, UseImeControlOptions } from './hooks/useImeControl'
+
+// Optional context + unstyled components
+export { RimeProvider, useRimeContext } from './components/context'
+export { RimeTextarea } from './components/RimeTextarea'
+export type { RimeTextareaProps } from './components/RimeTextarea'
+export { CandidatePanel } from './components/CandidatePanel'
+export type { CandidatePanelProps, CandidateInfo } from './components/CandidatePanel'
+export { SchemaSelector } from './components/SchemaSelector'
+export type { SchemaSelectorProps } from './components/SchemaSelector'
+
+// Engine layer (for custom integrations)
+export {
+  createRimeEngine,
+  DEFAULT_WORKER_URL,
+  type RimeEngine,
+  type RimeEngineOptions,
+} from './engine/engine'
+export { toRimeKey, toRimeKeyRelease, isPrintable, RIME_KEY_MAP } from './engine/rimeKeys'
+export { getLanguage } from './engine/locale'
+export {
+  buildSchemaMetadata,
+  DEFAULT_SCHEMA_ID,
+  type SchemaMetadata,
+  type SelectOption,
+  type Variant,
+  type HideComment,
+} from './engine/schema-metadata'
+
+// Types
+export type {
+  RimeResult,
+  RimeCommitted,
+  RimeAccepted,
+  RimeRejected,
+  RimeUnhandled,
+  RimeCandidate,
+  RimeLanguage,
+  Preedit,
+} from './engine/types'

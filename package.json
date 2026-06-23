@@ -1,0 +1,55 @@
+{
+  "name": "react-rime",
+  "version": "0.1.0",
+  "description": "Headless React hooks for the RIME input-method engine (WASM). Build your own Chinese text-entry UI.",
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "keywords": [
+    "rime",
+    "react",
+    "ime",
+    "input-method",
+    "chinese",
+    "pinyin",
+    "wasm",
+    "headless"
+  ],
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./worker.js": "./dist/worker.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup && cp src/assets/worker.js dist/worker.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@libreservice/my-worker": "^0.4.2"
+  },
+  "peerDependencies": {
+    "react": ">=17",
+    "react-dom": ">=17"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "jsdom": "^24.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsup": "^8.1.0",
+    "typescript": "^5.5.3",
+    "vitest": "^2.0.0"
+  }
+}
