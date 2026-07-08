@@ -38,8 +38,7 @@
     "@libreservice/my-worker": "^0.4.2"
   },
   "peerDependencies": {
-    "react": ">=17",
-    "react-dom": ">=17"
+    "react": ">=17"
   },
   "devDependencies": {
     "@testing-library/react": "^16.0.0",

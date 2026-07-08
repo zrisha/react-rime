@@ -233,6 +233,8 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
     setCandidates([])
     setHighlighted(0)
     setSelectLabels(undefined)
+    setPage(0)
+    setIsLastPage(true)
   }, [])
 
   const analyze = useCallback(

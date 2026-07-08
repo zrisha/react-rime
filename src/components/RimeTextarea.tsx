@@ -13,11 +13,17 @@ export interface RimeTextareaProps
  * composition and binds the committed-text buffer. Bring your own styling.
  */
 export const RimeTextarea = forwardRef<HTMLTextAreaElement, RimeTextareaProps>(
-  function RimeTextarea({ rime, onKeyDown, onKeyUp, ...rest }, _ref) {
+  function RimeTextarea({ rime, onKeyDown, onKeyUp, ...rest }, ref) {
     const r = useResolvedRime(rime)
     return (
       <textarea
-        ref={r.inputRef as React.RefObject<HTMLTextAreaElement>}
+        ref={(el) => {
+          // RefObject.current is readonly in @types/react 18; the hook's ref
+          // is a mutable useRef under the hood.
+          ;(r.inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el
+          if (typeof ref === 'function') ref(el)
+          else if (ref) ref.current = el
+        }}
         value={r.text}
         onChange={(e) => r.setText(e.target.value)}
         onKeyDown={(e) => {

@@ -11,6 +11,9 @@ import type { RimeResult } from './types'
  * jsdelivr so consumers need zero asset configuration. It in turn streams
  * rime.js / rime.wasm / rime.data and per-schema dictionaries from jsdelivr,
  * caching them offline in IndexedDB.
+ *
+ * Keep the version pinned here in lockstep with the vendored copy at
+ * src/assets/worker.js — they must be the same file.
  */
 export const DEFAULT_WORKER_URL =
   'https://cdn.jsdelivr.net/npm/@libreservice/my-rime@0.10.9/dist/worker.js'
@@ -85,12 +88,7 @@ export async function createRimeEngine(
       })
     },
     dispose() {
-      try {
-        // LambdaWorker wraps a Worker; terminate if exposed.
-        ;(worker as unknown as { worker?: Worker }).worker?.terminate()
-      } catch {
-        /* best-effort */
-      }
+      worker.worker.terminate()
       if (isBlob) URL.revokeObjectURL(url)
     },
   }

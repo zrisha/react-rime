@@ -9,7 +9,9 @@ export default defineConfig({
     headless: true,
   },
   webServer: {
-    command: 'npm run preview',
+    // Build first: preview serves example/dist, which otherwise goes stale
+    // and silently tests old library code.
+    command: 'npm run build && npm run preview',
     url: 'http://localhost:4173',
     reuseExistingServer: true,
     timeout: 30_000,
