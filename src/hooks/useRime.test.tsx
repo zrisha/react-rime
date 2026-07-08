@@ -264,6 +264,27 @@ describe('useRime composition', () => {
     expect(consumerKeyDown).toHaveBeenCalled()
   })
 
+  it('returns identity-stable functions across state changes', async () => {
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    const first = result.current
+    act(() => {
+      result.current.setText('force a state change')
+    })
+    const second = result.current
+    expect(second).not.toBe(first) // state changed, object identity should too
+    expect(second.onKeyDown).toBe(first.onKeyDown)
+    expect(second.onKeyUp).toBe(first.onKeyUp)
+    expect(second.selectCandidate).toBe(first.selectCandidate)
+    expect(second.changePage).toBe(first.changePage)
+    expect(second.setSchema).toBe(first.setSchema)
+    expect(second.changeLanguage).toBe(first.changeLanguage)
+    expect(second.changeVariant).toBe(first.changeVariant)
+    expect(second.cancelComposition).toBe(first.cancelComposition)
+    expect(second.setText).toBe(first.setText)
+  })
+
   it('toggles English mode on a bare Shift tap, but not around other keys', async () => {
     const { result } = renderHook(() => useRime())
     await waitFor(() => expect(result.current.ready).toBe(true))

@@ -3,6 +3,7 @@
 // module-level singleton worker → an injected engine instance.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEventCallback } from './useEventCallback'
 import type { RimeEngine } from '../engine/engine'
 import {
   buildSchemaMetadata,
@@ -11,6 +12,8 @@ import {
   type SelectOption,
   type Variant,
 } from '../engine/schema-metadata'
+import type { SchemaId } from '../engine/schema-ids'
+import { devWarn } from '../engine/devWarn'
 
 const ASCII_MODE = 'ascii_mode'
 const FULL_SHAPE = 'full_shape'
@@ -30,8 +33,12 @@ function useSavedBoolean(key: string, defaultTrue: boolean) {
 }
 
 export interface UseImeControlOptions {
-  /** Initial schema id. Defaults to the first schema (luna_pinyin). */
-  schema?: string
+  /**
+   * Initial schema id (autocompletes the bundled ids; see docs/SCHEMAS.md).
+   * Custom self-deployed schema ids are accepted as plain strings.
+   * Defaults to the first schema (luna_pinyin).
+   */
+  schema?: SchemaId | (string & {})
 }
 
 export function useImeControl(engine: RimeEngine | null, options: UseImeControlOptions = {}) {
@@ -93,40 +100,46 @@ export function useImeControl(engine: RimeEngine | null, options: UseImeControlO
     [engine, meta],
   )
 
-  const selectIME = useCallback(
-    async (targetIME: string) => {
-      if (!engine) return
-      setLoading(true, targetIME)
-      try {
-        await engine.setIME(targetIME)
-        setSchemaId(targetIME)
-        if (!deployed) {
-          await applyVariant(targetIME, variantIndexMap[targetIME] ?? 0)
-        }
-        // librime resets ascii_mode on schema switch; re-sync the rest.
-        for (const [option, box] of Object.entries(basicOptionMap)) {
-          if (option === ASCII_MODE) {
-            setIsEnglish(false)
-            continue
-          }
-          await engine.setOption(option, box.value)
-        }
-      } catch (e) {
-        // Rethrow so callers (useRime) can surface it via their error state.
-        setLoadingState(false)
-        throw e instanceof Error ? e : new Error(String(e))
+  // Actions use useEventCallback: one identity for the hook's lifetime, always
+  // reading the latest render's state.
+  const selectIME = useEventCallback(async (targetIME: string) => {
+    if (!engine) return
+    if (!meta.ids.includes(targetIME)) {
+      devWarn(
+        `schema:${targetIME}`,
+        `schema "${targetIME}" is not in the bundled schemas.json (see docs/SCHEMAS.md) — ` +
+          'assuming a custom schema you deployed yourself; check for a typo otherwise.',
+      )
+    }
+    setLoading(true, targetIME)
+    try {
+      await engine.setIME(targetIME)
+      setSchemaId(targetIME)
+      if (!deployed) {
+        await applyVariant(targetIME, variantIndexMap[targetIME] ?? 0)
       }
-      setLoading(false, targetIME)
-    },
-    [engine, deployed, variantIndexMap, basicOptionMap, applyVariant], // eslint-disable-line react-hooks/exhaustive-deps
-  )
+      // librime resets ascii_mode on schema switch; re-sync the rest.
+      for (const [option, box] of Object.entries(basicOptionMap)) {
+        if (option === ASCII_MODE) {
+          setIsEnglish(false)
+          continue
+        }
+        await engine.setOption(option, box.value)
+      }
+    } catch (e) {
+      // Rethrow so callers (useRime) can surface it via their error state.
+      setLoadingState(false)
+      throw e instanceof Error ? e : new Error(String(e))
+    }
+    setLoading(false, targetIME)
+  })
 
-  const changeVariant = useCallback(async () => {
+  const changeVariant = useEventCallback(async () => {
     if (variants.length === 0) return
     const next = (variantIndex + 1) % variants.length
     setVariantIndexMap((m) => ({ ...m, [schemaId]: next }))
     await applyVariant(schemaId, next)
-  }, [schemaId, variantIndex, variants.length, applyVariant])
+  })
 
   function makeToggle(option: string, value: boolean, set: (v: boolean) => void) {
     return async () => {
@@ -137,13 +150,17 @@ export function useImeControl(engine: RimeEngine | null, options: UseImeControlO
     }
   }
 
-  const changeLanguage = makeToggle(ASCII_MODE, isEnglish, setIsEnglish)
-  const changeWidth = makeToggle(FULL_SHAPE, isFullWidth, setIsFullWidth)
-  const changeCharset = makeToggle(EXTENDED_CHARSET, isExtendedCharset, setIsExtendedCharset)
-  const changePunctuation = makeToggle(ASCII_PUNCT, isEnglishPunctuation, setIsEnglishPunctuation)
-  const changeEmoji = makeToggle(EMOJI_SUGGESTION, enableEmoji, setEnableEmoji)
+  const changeLanguage = useEventCallback(makeToggle(ASCII_MODE, isEnglish, setIsEnglish))
+  const changeWidth = useEventCallback(makeToggle(FULL_SHAPE, isFullWidth, setIsFullWidth))
+  const changeCharset = useEventCallback(
+    makeToggle(EXTENDED_CHARSET, isExtendedCharset, setIsExtendedCharset),
+  )
+  const changePunctuation = useEventCallback(
+    makeToggle(ASCII_PUNCT, isEnglishPunctuation, setIsEnglishPunctuation),
+  )
+  const changeEmoji = useEventCallback(makeToggle(EMOJI_SUGGESTION, enableEmoji, setEnableEmoji))
 
-  const syncOptions = useCallback(
+  const syncOptions = useEventCallback(
     (updatedOptions: string[]) => {
       if (updatedOptions.length === 1) {
         const updatedOption = updatedOptions[0]
@@ -177,38 +194,60 @@ export function useImeControl(engine: RimeEngine | null, options: UseImeControlO
         }
       }
     },
-    [basicOptionMap, deployed, variants, schemaId],
   )
 
-  return {
-    // state
-    schemaId,
-    schemas: selectOptions,
-    deployed,
-    setDeployed,
-    loading,
-    ime,
-    showVariant,
-    variants,
-    variant,
-    variantIndex,
-    hideComment,
-    isEnglish,
-    isFullWidth,
-    isExtendedCharset,
-    isEnglishPunctuation,
-    enableEmoji,
-    // actions
-    selectIME,
-    setSchema: selectIME,
-    syncOptions,
-    changeVariant,
-    changeLanguage,
-    changeWidth,
-    changeCharset,
-    changePunctuation,
-    changeEmoji,
-  }
+  // Memoized so the object identity only changes when state does (all actions
+  // are identity-stable).
+  return useMemo(
+    () => ({
+      // state
+      schemaId,
+      schemas: selectOptions,
+      deployed,
+      setDeployed,
+      loading,
+      ime,
+      showVariant,
+      variants,
+      variant,
+      variantIndex,
+      hideComment,
+      isEnglish,
+      isFullWidth,
+      isExtendedCharset,
+      isEnglishPunctuation,
+      enableEmoji,
+      // actions
+      selectIME,
+      setSchema: selectIME,
+      syncOptions,
+      changeVariant,
+      changeLanguage,
+      changeWidth,
+      changeCharset,
+      changePunctuation,
+      changeEmoji,
+    }),
+    // actions are identity-stable; only state belongs in the deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      schemaId,
+      selectOptions,
+      deployed,
+      loading,
+      ime,
+      showVariant,
+      variants,
+      variant,
+      variantIndex,
+      hideComment,
+      isEnglish,
+      isFullWidth,
+      isExtendedCharset,
+      isEnglishPunctuation,
+      enableEmoji,
+    ],
+  )
 }
 
 export type ImeControl = ReturnType<typeof useImeControl>

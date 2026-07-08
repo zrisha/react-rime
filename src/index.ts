@@ -31,6 +31,7 @@ export {
 } from './engine/engine'
 export { toRimeKey, toRimeKeyRelease, isPrintable, RIME_KEY_MAP } from './engine/rimeKeys'
 export { getLanguage } from './engine/locale'
+export { SCHEMA_IDS, type SchemaId } from './engine/schema-ids'
 export {
   buildSchemaMetadata,
   DEFAULT_SCHEMA_ID,

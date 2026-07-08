@@ -31,11 +31,13 @@
     "build": "tsup && cp src/assets/worker.js dist/worker.js",
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "npm run build && cd example && npx playwright test",
     "update-worker": "node scripts/update-worker.mjs",
-    "check-worker": "node scripts/update-worker.mjs --check"
+    "check-worker": "node scripts/update-worker.mjs --check",
+    "generate:schemas": "node scripts/generate-schemas.mjs"
   },
   "dependencies": {
     "@libreservice/my-worker": "^0.4.2"
@@ -47,11 +49,14 @@
     "@testing-library/react": "^16.0.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "eslint": "^10.6.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^24.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsup": "^8.1.0",
     "typescript": "^5.5.3",
+    "typescript-eslint": "^8.63.0",
     "vitest": "^2.0.0"
   }
 }

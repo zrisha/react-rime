@@ -2,13 +2,15 @@
 // machine (preedit + candidates), keyboard translation, and the committed text
 // buffer. Everything the optional components do is available here.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEventCallback } from './useEventCallback'
 import {
   createRimeEngine,
   type RimeEngine,
   type RimeEngineOptions,
 } from '../engine/engine'
 import { toRimeKey, toRimeKeyRelease, isPrintable } from '../engine/rimeKeys'
+import { devWarn } from '../engine/devWarn'
 import { EMPTY_PREEDIT, type Preedit, type RimeCandidate, type RimeResult } from '../engine/types'
 import { useImeControl, type UseImeControlOptions } from './useImeControl'
 
@@ -162,9 +164,14 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
   const control = useImeControl(engine, { schema })
 
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null)
-  const [text, setText] = useState(defaultText ?? '')
+  const [text, setTextState] = useState(defaultText ?? '')
+  // Mirror of `text` that is current the moment it's written (state lags a
+  // render), so consecutive commits in one tick read the right buffer.
   const textRef = useRef(text)
-  textRef.current = text
+  const setText = useCallback((value: string) => {
+    textRef.current = value
+    setTextState(value)
+  }, [])
 
   const [composing, setComposing] = useState(false)
   // Synchronous mirror of `composing`, flipped in onKeyDown *before* the async
@@ -189,6 +196,9 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
     let created: RimeEngine | null = null
     // On workerUrl change this re-runs against a fresh worker: reset the
     // lifecycle so the init effect below deploys a schema on the new engine.
+    // Deliberate sync setState: this is a reset-on-dep-change, not a
+    // render-driven update (no-ops on first mount).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEngine(null)
     setReady(false)
     control.setDeployed(false)
@@ -238,6 +248,11 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
       const el = inputRef.current
       const current = textRef.current
       if (!el) {
+        devWarn(
+          'no-input',
+          'text was committed but no input element is attached — appending to the end of the buffer. ' +
+            'Spread getInputProps() onto your element (or attach inputRef) for caret-aware insertion.',
+        )
         const next = current + toInsert
         setText(next)
         onCommit?.(toInsert)
@@ -253,7 +268,7 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
         el.selectionStart = el.selectionEnd = pos
       })
     },
-    [onCommit],
+    [onCommit, setText],
   )
 
   const clearComposition = useCallback(() => {
@@ -307,11 +322,19 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
     [engine, analyze],
   )
 
-  const onKeyDown = useCallback(
+  const onKeyDown = useEventCallback(
     (evt: AnyKeyboardEvent) => {
       // Also gate on `loading` so keystrokes typed mid-schema-switch aren't
       // processed against a half-configured schema.
       if (!ready || !engine || control.loading) return
+      const el = inputRef.current
+      if (el && el.value !== textRef.current) {
+        devWarn(
+          'value-drift',
+          "the input's value has drifted from rime.text — bind value={rime.text} and " +
+            'onChange (or spread getInputProps()). Ignore this if you manage text yourself via onCommit.',
+        )
+      }
       const e = nativeOf(evt)
       if (e.key === 'Shift') {
         exclusiveShiftRef.current = true
@@ -326,10 +349,9 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
       e.preventDefault()
       void input(rimeKey)
     },
-    [ready, engine, control.loading, input],
   )
 
-  const onKeyUp = useCallback(
+  const onKeyUp = useEventCallback(
     (evt: AnyKeyboardEvent) => {
       if (!ready || !engine || control.loading) return
       const e = nativeOf(evt)
@@ -341,10 +363,9 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
       const releaseKey = toRimeKeyRelease(e)
       if (releaseKey) void input(releaseKey)
     },
-    [ready, engine, control, input],
   )
 
-  const selectCandidate = useCallback(
+  const selectCandidate = useEventCallback(
     async (index: number) => {
       if (!engine) return
       const raw = await engine.selectCandidateOnCurrentPage(index)
@@ -353,27 +374,24 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
       // the input so the user can keep typing (my_rime refocuses likewise).
       inputRef.current?.focus()
     },
-    [engine, analyze],
   )
 
-  const changePage = useCallback(
+  const changePage = useEventCallback(
     async (backward: boolean) => {
       if (!engine) return
       const raw = await engine.changePage(backward)
       await analyze(JSON.parse(raw) as RimeResult, '')
       inputRef.current?.focus()
     },
-    [engine, analyze],
   )
 
   // Semantic wrappers over the key protocol so pointer-driven UIs never need
   // to fabricate KeyboardEvents. Each is a no-op unless composing.
-  const sendIfComposing = useCallback(
+  const sendIfComposing = useEventCallback(
     async (rimeKey: string) => {
       if (!composingRef.current) return
       await input(rimeKey)
     },
-    [input],
   )
   const cancelComposition = useCallback(() => sendIfComposing('{Escape}'), [sendIfComposing])
   const commitHighlighted = useCallback(() => sendIfComposing(' '), [sendIfComposing])
@@ -405,58 +423,77 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
         overrides.onKeyUp?.(e)
       },
     }),
-    [text, onKeyDown, onKeyUp],
+    // onKeyDown/onKeyUp are identity-stable; value is the real dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [text, setText],
   )
 
-  const setSchema = useCallback(
-    async (id: string) => {
-      try {
-        await control.setSchema(id)
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error(String(err)))
-      }
-    },
-    [control],
-  )
+  const setSchema = useEventCallback(async (id: string) => {
+    try {
+      await control.setSchema(id)
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)))
+    }
+  })
 
-  return {
-    ready,
-    loading: control.loading,
-    error,
-    text,
-    setText,
-    composing,
-    preedit,
-    candidates,
-    highlighted,
-    selectLabels,
-    page,
-    isLastPage,
-    getInputProps,
-    inputRef,
-    onKeyDown,
-    onKeyUp,
-    selectCandidate,
-    changePage,
-    cancelComposition,
-    commitHighlighted,
-    commitRaw,
-    highlightNext,
-    highlightPrev,
-    schema: control.schemaId,
-    setSchema,
-    schemas: control.schemas,
-    variants: control.variants,
-    variant: control.variant,
-    changeVariant: control.changeVariant,
-    isEnglish: control.isEnglish,
-    changeLanguage: control.changeLanguage,
-    isFullWidth: control.isFullWidth,
-    changeWidth: control.changeWidth,
-    isEnglishPunctuation: control.isEnglishPunctuation,
-    changePunctuation: control.changePunctuation,
-    enableEmoji: control.enableEmoji,
-    changeEmoji: control.changeEmoji,
-    hideComment: control.hideComment,
-  }
+  // Memoized so the object identity (e.g. as a context value in RimeProvider)
+  // only changes when state does; every function above is identity-stable.
+  return useMemo(
+    () => ({
+      ready,
+      loading: control.loading,
+      error,
+      text,
+      setText,
+      composing,
+      preedit,
+      candidates,
+      highlighted,
+      selectLabels,
+      page,
+      isLastPage,
+      getInputProps,
+      inputRef,
+      onKeyDown,
+      onKeyUp,
+      selectCandidate,
+      changePage,
+      cancelComposition,
+      commitHighlighted,
+      commitRaw,
+      highlightNext,
+      highlightPrev,
+      schema: control.schemaId,
+      setSchema,
+      schemas: control.schemas,
+      variants: control.variants,
+      variant: control.variant,
+      changeVariant: control.changeVariant,
+      isEnglish: control.isEnglish,
+      changeLanguage: control.changeLanguage,
+      isFullWidth: control.isFullWidth,
+      changeWidth: control.changeWidth,
+      isEnglishPunctuation: control.isEnglishPunctuation,
+      changePunctuation: control.changePunctuation,
+      enableEmoji: control.enableEmoji,
+      changeEmoji: control.changeEmoji,
+      hideComment: control.hideComment,
+    }),
+    // functions are identity-stable except getInputProps (tracks text)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      ready,
+      control,
+      error,
+      text,
+      composing,
+      preedit,
+      candidates,
+      highlighted,
+      selectLabels,
+      page,
+      isLastPage,
+      getInputProps,
+    ],
+  )
 }
