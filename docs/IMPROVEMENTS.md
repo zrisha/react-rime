@@ -1,135 +1,236 @@
 # Improvements & open decisions
 
 Follow-ups from the 2026-07-07 code review. The high/medium findings were fixed
-in `7d22c9e` and the low-severity cleanups in `1157d83`; everything below is
-deliberately *not* done yet — either it changes behavior and needs a decision,
-or it's an enhancement rather than a fix.
+in `7d22c9e` and the low-severity cleanups in `1157d83`. Ordered by what most
+improves developer experience — for people *using* the package first, for
+people *working on* the repo second, with the remaining behavior/robustness
+notes at the end.
 
-## Deferred from the review (behavior decisions needed)
+## DX: API ergonomics
 
-### 1. localStorage keys are unprefixed and shared with my-rime
+### 1. `getInputProps()` prop-getter (kills the worst wart)
 
-`useSavedBoolean` persists under `full_shape`, `extended_charset`,
-`ascii_punct`, `emoji_suggestion` — the exact keys the my-rime PWA uses. Any
-other code on the same origin can collide with them, but prefixing (e.g.
-`react-rime:full_shape`) would silently drop settings for anyone who already
-has state under the old keys, and would stop sharing settings with an embedded
-my-rime instance if that sharing is intentional.
+The README's first example needs a cast and five lines of wiring:
 
-**Decision needed:** prefix (with a one-time migration read of the legacy
-keys), or document the sharing as a feature. A third option: accept a
-`storage` option (or `persist: false`) so consumers control persistence
-entirely — also fixes multiple independent `useRime` instances on one origin
-overwriting each other's settings.
+```tsx
+<textarea
+  ref={rime.inputRef as React.RefObject<HTMLTextAreaElement>}
+  value={rime.text}
+  onChange={(e) => rime.setText(e.target.value)}
+  onKeyDown={rime.onKeyDown}
+  onKeyUp={rime.onKeyUp}
+/>
+```
 
-### 2. Unstable function identities from the hooks
+A downshift-style prop-getter collapses that to `<textarea {...rime.getInputProps()} />`
+— no cast, nothing to forget, and consumer overrides can be merged
+(`getInputProps({ onKeyDown })`). Alternatively (or additionally) make the
+hook generic — `useRime<HTMLTextAreaElement>()` — so `inputRef` types
+correctly without a cast. This is the single highest-leverage API change.
 
-`useImeControl` returns a fresh object every render, and `makeToggle`
-recreates `changeLanguage`/`changeWidth`/etc. each time. That cascades:
-`analyze`, `input`, `onKeyDown`, `onKeyUp` in `useRime` are rebuilt per
-render, so consumers can't usefully memoize components that receive them, and
-effect deps on any returned function re-fire every render. Fixing it properly
-means restructuring `useImeControl` (wrap toggles in `useCallback`, memoize
-the returned object, or hold volatile values in refs, useEvent-style). Not a
-correctness bug — just churn — but it's the main thing standing between the
-hook and "well-behaved React citizen".
+### 2. Semantic composition actions
 
-## Correctness / robustness ideas
+A custom candidate UI can `selectCandidate(i)` and `changePage()`, but there is
+no way to *cancel* a composition or commit the highlighted candidate without
+synthesizing a fake `KeyboardEvent`. Add thin wrappers over the engine's key
+protocol:
 
-- **Multiple inputs per provider are quietly broken.** `RimeProvider` shares
-  one `useRime` — and therefore one `inputRef` — so if two `RimeTextarea`s sit
-  under one provider, the last-mounted one owns the ref and commits land in
-  it regardless of which was focused. Either track the focused element
-  (listen for `focusin` on registered inputs) or document
-  one-input-per-provider as a hard rule.
-- **Android/mobile keyboards don't work.** Upstream my_rime has dedicated
-  Android Chromium handling (keydown arrives as `Unidentified`, composition
-  reconstructed from `input` events — see `MyPanel.vue`'s
-  "code specific to Android Chromium" blocks). The port dropped all of it, so
-  the hook is desktop-keyboard-only today. Port that block or document the
-  limitation.
-- **No timeout/progress on engine startup.** First load streams ~3.5 MB of
-  WASM + dictionaries; `createRimeEngine`'s fetch and the initial `setIME`
-  can hang for a long time on a slow network with no signal to the UI beyond
-  `loading: true`. Ideas: expose download progress (the worker would need a
-  control message), a configurable timeout that rejects into `error`, and a
-  `retry()` action.
-- **Typed deploy status.** `onDeployStatus(handler: (status: string, ...))`
-  passes raw strings ("start"/"success"/"failure"). A union type would let
-  consumers switch on it safely.
-- **Cross-tab settings sync.** The saved booleans don't listen for `storage`
-  events; two tabs drift. Cheap to add if persistence stays in localStorage.
+- `cancelComposition()` → `process('{Escape}')`
+- `commitHighlighted()` → `process(' ')` (or select at `highlighted`)
+- `commitRaw()` → commit the preedit as typed (Enter behavior)
+- `highlightNext()` / `highlightPrev()` → arrow keys
 
-## API ideas
+Each is ~3 lines, and together they make the hook genuinely headless: a
+pointer-driven UI (mobile toolbar, mouse-only picker) needs zero keyboard
+event fabrication.
 
-- **Air-gapped support (the real fix).** The bundled worker is my_rime's CDN
-  build; engine binaries always come from jsdelivr. Options, roughly in order
-  of effort: (a) vendor a second, location-relative worker build from my_rime
-  (built with its CDN flag unset) and ship it as
-  `react-rime/worker-local.js`; (b) add an `assetsUrl` engine option passed
-  to the worker via a control message (needs an upstream worker change);
-  (c) document a recipe for building the worker from my_rime source.
-- **Bring-your-own-engine.** `useRime` always creates its own engine. An
-  `engine` option accepting a `RimeEngine` (from `createRimeEngine`) would
-  enable sharing one worker across hooks, custom FS setup before first use,
-  and testing without module mocks.
-- **Custom schemas end-to-end.** The engine exposes `FS`, `deploy()`, and
-  `resetUserDirectory`, but `useRime` doesn't surface them, and
-  `buildSchemaMetadata` only knows the bundled `schemas.json`, so a custom
-  schema gets no variants/labels (the guards added in the review make it
-  *safe*, not *good*). Accept user-supplied schema metadata
-  (`schemas` option) and re-export the deploy flow from the hook.
-- **Fully-controlled text mode.** The hook owns the committed-text buffer;
-  `setText` + caret-insert via `inputRef` is convenient but awkward for rich
-  editors (contenteditable, CodeMirror, Slate) that own their document. A
-  mode where the hook manages only composition and fires `onCommit` — no
-  `text`, no `inputRef` writes — would make it genuinely headless. (Most of
-  this exists already: `insert()` is the only coupling.)
-- **Expose `setPageSize`.** The engine supports it; the hook doesn't. One
-  option + one effect.
-- **Caret-positioning helper.** Consumers building an at-caret candidate
-  popup all need caret coordinates in a textarea (upstream uses the
-  `textarea-caret` trick). A small `getCaretRect(el)` export — or a
-  documented recipe — removes the hardest part of building a real IME UI.
-- **Components: keep or cut.** If kept: they need a11y work
-  (`role="listbox"`/`option`, `aria-activedescendant`, keyboard focus
-  management) and could move to a `react-rime/components` subpath export so
-  the core stays lean. If cut: fold the `data-rime-*` conventions into README
-  recipes instead.
+### 3. Typed schema ids
 
-## Packaging / infra ideas
+`schema: 'luna_pinyin'` is a bare string; consumers can't discover valid ids
+without opening `schemas.json`. Generate a union type from it
+(`type SchemaId = 'luna_pinyin' | 'double_pinyin' | …`), type
+`UseRimeOptions['schema']` as `SchemaId | (string & {})` so custom schemas
+still pass, and export the list as a value (`SCHEMA_IDS`). Autocomplete on the
+main option is a big first-run win.
 
-- **CI.** No workflows exist. A minimal GitHub Actions matrix: typecheck +
-  unit tests on PR; the Playwright smoke (needs jsdelivr network) as a
-  scheduled/manual job. Cache the engine assets between runs if flakiness
-  from CDN fetches shows up.
-- **Worker lockstep check.** `DEFAULT_WORKER_URL` pins
-  `@libreservice/my-rime@0.10.9` and `src/assets/worker.js` must be the same
-  file; nothing enforces that. A tiny script (fetch the CDN URL, byte-compare
-  against the vendored copy) run in CI or `prepublishOnly` turns the comment
-  into a guarantee.
-- **package.json metadata.** Missing `repository`
-  (`https://github.com/zrisha/react-rime`), `homepage`, and `bugs` — npm
-  displays these. Consider `publishConfig.provenance` for npm provenance.
-- **ESLint isn't actually configured.** The source carries
-  `eslint-disable react-hooks/exhaustive-deps` comments but there's no ESLint
-  setup, so nothing checks the *other* hooks rules. Adding
-  `eslint` + `eslint-plugin-react-hooks` would catch dep-array drift — the
-  exact bug class behind the stale-`ime` finding.
-- **More test coverage where the bugs were.** `useImeControl` has no direct
-  tests (schema switch re-sync, `syncOptions`, variant cycling); an SSR test
-  (`renderToString` in a node environment) would lock in the `navigator`
-  fix; smoke-test schema switching and shift-tap against the real engine.
-- **SSR docs.** The hooks now render safely on the server, but the README
-  says nothing about Next.js usage (the engine still only *loads* in the
-  browser; `ready` stays false server-side). A short "SSR / Next.js" section
-  would preempt the most likely issue reports.
+### 4. Stable function identities
+
+`useImeControl` returns a fresh object and fresh toggle closures every render,
+which cascades into `onKeyDown`/`onKeyUp`/`analyze` being rebuilt per render.
+Consumers can't memoize components receiving them, and any effect depending on
+a returned function re-fires each render. Restructure with `useCallback` +
+refs for volatile values (useEvent pattern). This was deferred from the review
+as "not a correctness bug" — but it's really a DX item: it's the difference
+between a hook people fight and one that behaves like the ecosystem expects.
+
+### 5. Dev-mode warnings
+
+Cheap `console.warn`s behind `process.env.NODE_ENV !== 'production'`:
+
+- committed text arrived but `inputRef` was never attached (silent append mode)
+- the bound element's `value` has drifted from `rime.text` (consumer forgot
+  `value={rime.text}` / `onChange`)
+- `schema` option isn't in the bundled metadata (typo vs. custom schema)
+- `useRime` options object identity changes every render *and* `workerUrl`
+  changed (engine is being torn down/recreated unintentionally)
+
+These convert the four most likely integration mistakes from "it silently
+half-works" into a one-line explanation.
+
+## DX: documentation
+
+### 6. Document the schemas you ship
+
+Nothing lists what's actually available. A README (or docs/) table generated
+from `schemas.json` — id, name, group, variants, extended-charset support —
+plus one sentence on what each family *is* (Pinyin vs. double Pinyin vs. Wubi
+vs. Cangjie…). This is the #1 question every consumer has in minute two.
+
+### 7. Keyboard behavior reference
+
+A table of what keys mean *while composing*: Space commits highlighted, digits
+select by label, `-`/`=` and PageUp/Down page, arrows move highlight/cursor,
+Escape cancels, Enter commits raw input, shift-tap toggles English, F4 /
+Ctrl+` opens the schema menu. None of this is written down anywhere — it's
+inherited RIME behavior the consumer's users will hit immediately, and the
+consumer needs it to build help UI.
+
+### 8. Lifecycle & performance expectations
+
+Document the load story: what `loading`/`ready`/`error` mean, that first use
+streams ~3.5 MB core + per-schema dictionaries from jsdelivr, that everything
+caches in IndexedDB (second load is offline-capable), that the first keystroke
+after a schema switch can lag while a dictionary streams in. Also which
+settings persist to localStorage (and the my-rime key-sharing described in
+§14).
+
+### 9. Cookbook recipes
+
+Short, copy-pasteable:
+
+- **Candidate panel at the caret** — the `textarea-caret` coordinates trick
+  (upstream does this; it's the hardest part of a real IME UI). Consider
+  shipping a tiny `getCaretRect(el)` helper instead of only documenting it.
+- **Next.js / SSR** — hooks render safely server-side now; show the
+  `'use client'` + dynamic-import pattern and note `ready` is always false on
+  the server.
+- **Custom candidate UI** — a full headless example beyond the README's
+  10-liner (highlight styling, paging, comments/emoji handling via
+  `hideComment`).
+- **CSP requirements** — the default setup needs `worker-src blob:` and
+  `connect-src https://cdn.jsdelivr.net`; self-hosting changes both. Nobody
+  will figure this out from the error messages.
+
+### 10. Generated API reference
+
+Every public symbol already carries JSDoc (the README table says "selected"
+because the full surface is ~30 fields). TypeDoc (or typedoc-plugin-markdown
+into docs/) turns the existing comments into a complete reference for free —
+the writing is already done.
+
+### 11. Live demo
+
+Deploy `example/dist` to GitHub Pages via Actions and link it from the README.
+For a *text-input* library, trying it in 5 seconds beats any amount of prose;
+it's also the strongest "does this actually work" signal for evaluators.
+
+### 12. CHANGELOG.md
+
+Even a hand-maintained one. The review just changed key-handling behavior in
+ways an early adopter would want called out (`toRimeKey` signature, Control
+combos now forwarded while composing, `main` field removed).
+
+## DX: contributing to the repo
+
+### 13. HMR dev loop for the example
+
+`example` consumes `react-rime` from the built `dist`, so the contributor loop
+is edit → `npm run build` → refresh (the review itself got bitten by a stale
+build). Alias the package to source in dev:
+
+```ts
+// example/vite.config.ts
+resolve: { alias: { 'react-rime': path.resolve(__dirname, '../src/index.ts') } }
+```
+
+(dev only — keep prod builds consuming `dist` so the smoke test exercises the
+real artifact). Instant HMR against library source.
+
+### 14. Root `npm run smoke`
+
+Running the real-WASM test today means knowing to build the lib, then the
+example, then `npx playwright test` from `example/`. One root script that does
+the chain (`npm run build && npm --prefix example run build && npm --prefix
+example exec playwright test`) makes the most valuable test in the repo
+one command.
+
+### 15. `update-worker` script
+
+Bumping the engine requires editing `DEFAULT_WORKER_URL` *and* re-vendoring
+`src/assets/worker.js` in lockstep (currently enforced by a comment). A script
+that takes a version, downloads the CDN worker, writes both, and diffs —
+plus a CI check that the vendored file byte-matches the pinned URL — turns the
+comment into a guarantee.
+
+### 16. ESLint (it isn't configured)
+
+The source carries `eslint-disable react-hooks/exhaustive-deps` comments but
+no ESLint exists, so nothing checks the other hooks rules. `eslint` +
+`eslint-plugin-react-hooks` would catch dep-array drift — the exact bug class
+behind the stale-`ime` finding.
+
+### 17. Tests where the review found bugs
+
+`useImeControl` has no direct tests (schema-switch option re-sync,
+`syncOptions`, variant cycling); an SSR test (`renderToString` under a node
+environment) would lock in the `navigator` fix; the smoke test could cover
+schema switching and shift-tap. Plus CI (typecheck + unit on PR; smoke as a
+scheduled job since it needs jsdelivr).
+
+## Open behavior decisions (deferred from the review)
+
+### 18. localStorage keys are unprefixed and shared with my-rime
+
+`full_shape`, `extended_charset`, `ascii_punct`, `emoji_suggestion` — the
+exact keys the my-rime PWA uses, collidable by anything on the origin.
+Prefixing breaks existing users' saved settings and any intentional sharing.
+Options: prefix with a one-time legacy-key migration; document sharing as a
+feature; or add a `storage`/`persist: false` option so consumers own
+persistence (also fixes two `useRime` instances overwriting each other).
+
+### 19. Components: keep or cut
+
+If kept: a11y work (`role="listbox"`, `aria-activedescendant`, focus
+management) and possibly a `react-rime/components` subpath so the core stays
+lean. If cut: fold the `data-rime-*` conventions into README recipes.
+
+## Robustness backlog (lower priority)
+
+- **Multiple inputs per provider**: two `RimeTextarea`s under one
+  `RimeProvider` share one `inputRef`; the last-mounted wins and commits land
+  in it regardless of focus. Track the focused element or document
+  one-input-per-provider.
+- **Android/mobile**: upstream's Android Chromium handling (`Unidentified`
+  keydowns reconstructed from `input` events) was not ported; the hook is
+  desktop-keyboard-only. Port it or document the limitation.
+- **Startup timeout/progress/retry**: first load can hang on slow networks
+  with no signal beyond `loading: true`; no retry path.
+- **Typed deploy status** instead of raw `'success'`/`'failure'` strings.
+- **Air-gapped worker**: bundled worker is my_rime's CDN build; true
+  self-hosting needs a location-relative worker build (vendor one as
+  `react-rime/worker-local.js`, or add an `assetsUrl` control message
+  upstream).
+- **Bring-your-own-engine / custom schemas**: accept an external `RimeEngine`
+  and user-supplied schema metadata so `FS` + `deploy()` schemas get
+  variants/labels (the review's guards made unknown ids *safe*, not *good*).
+- **package.json metadata**: `repository`
+  (`https://github.com/zrisha/react-rime`), `homepage`, `bugs`,
+  `publishConfig.provenance`.
 
 ## Explicitly considered and rejected
 
-- **Bundle-size work on `schemas.json`** — it's 5.6 KB raw (dist/index.js is
-  ~30 KB total). Not worth lazy-loading.
-- **Worker pooling/reuse across `useRime` instances by default** — sharing
-  state (composition, options) across independent engines is exactly what the
-  per-instance factory was built to avoid; bring-your-own-engine (above)
-  covers the legitimate cases.
+- **Bundle-size work on `schemas.json`** — 5.6 KB raw (dist/index.js ~30 KB
+  total). Not worth lazy-loading.
+- **Default worker pooling across `useRime` instances** — shared engines mean
+  shared composition/options state, which the per-instance factory exists to
+  avoid; bring-your-own-engine covers the legitimate cases.
