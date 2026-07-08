@@ -2,7 +2,12 @@
 
 // Primary hook
 export { useRime } from './hooks/useRime'
-export type { UseRime, UseRimeOptions } from './hooks/useRime'
+export type {
+  UseRime,
+  UseRimeOptions,
+  RimeInputProps,
+  RimeInputPropsOverrides,
+} from './hooks/useRime'
 
 // Focused hooks (advanced)
 export { useImeControl } from './hooks/useImeControl'

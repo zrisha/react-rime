@@ -32,7 +32,10 @@
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "smoke": "npm run build && cd example && npx playwright test",
+    "update-worker": "node scripts/update-worker.mjs",
+    "check-worker": "node scripts/update-worker.mjs --check"
   },
   "dependencies": {
     "@libreservice/my-worker": "^0.4.2"

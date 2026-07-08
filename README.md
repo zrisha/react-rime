@@ -31,14 +31,7 @@ export function Editor() {
 
   return (
     <div>
-      <textarea
-        ref={rime.inputRef as React.RefObject<HTMLTextAreaElement>}
-        value={rime.text}
-        onChange={(e) => rime.setText(e.target.value)}
-        onKeyDown={rime.onKeyDown}
-        onKeyUp={rime.onKeyUp}
-        disabled={!rime.ready}
-      />
+      <textarea {...rime.getInputProps()} disabled={!rime.ready} />
 
       {rime.composing && (
         <ul>
@@ -112,10 +105,14 @@ import { RimeProvider, RimeTextarea, CandidatePanel } from 'react-rime'
 | `highlighted`             | Index of the highlighted candidate.                   |
 | `selectLabels`            | Selection labels (e.g. `1`–`9`), if provided.         |
 | `page` / `isLastPage`     | Candidate paging state.                               |
+| `getInputProps()`         | One spread wires an input: ref, value, key handlers.  |
 | `inputRef`                | Attach to your input/textarea for caret-aware commit. |
 | `onKeyDown` / `onKeyUp`   | Forward your element's key events here.                |
 | `selectCandidate(i)`      | Commit the candidate at index `i`.                    |
 | `changePage(backward)`    | Page through candidates.                              |
+| `cancelComposition()`     | Discard the preedit (Escape), no KeyboardEvent needed. |
+| `commitHighlighted()` / `commitRaw()` | Commit the highlighted candidate / the raw preedit. |
+| `highlightNext()` / `highlightPrev()` | Move the candidate highlight.             |
 | `schema` / `setSchema(id)`| Active schema and switcher.                           |
 | `schemas`                 | Grouped options for a schema `<select>`.              |
 | `changeLanguage()`        | Toggle ASCII (English) mode.                          |

@@ -17,23 +17,7 @@ export const RimeTextarea = forwardRef<HTMLTextAreaElement, RimeTextareaProps>(
     const r = useResolvedRime(rime)
     return (
       <textarea
-        ref={(el) => {
-          // RefObject.current is readonly in @types/react 18; the hook's ref
-          // is a mutable useRef under the hood.
-          ;(r.inputRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el
-          if (typeof ref === 'function') ref(el)
-          else if (ref) ref.current = el
-        }}
-        value={r.text}
-        onChange={(e) => r.setText(e.target.value)}
-        onKeyDown={(e) => {
-          r.onKeyDown(e)
-          onKeyDown?.(e)
-        }}
-        onKeyUp={(e) => {
-          r.onKeyUp(e)
-          onKeyUp?.(e)
-        }}
+        {...r.getInputProps<HTMLTextAreaElement>({ ref, onKeyDown, onKeyUp })}
         {...rest}
       />
     )

@@ -8,7 +8,7 @@ notes at the end.
 
 ## DX: API ergonomics
 
-### 1. `getInputProps()` prop-getter (kills the worst wart)
+### 1. `getInputProps()` prop-getter ✅ implemented 2026-07-07
 
 The README's first example needs a cast and five lines of wiring:
 
@@ -28,7 +28,7 @@ A downshift-style prop-getter collapses that to `<textarea {...rime.getInputProp
 hook generic — `useRime<HTMLTextAreaElement>()` — so `inputRef` types
 correctly without a cast. This is the single highest-leverage API change.
 
-### 2. Semantic composition actions
+### 2. Semantic composition actions ✅ implemented 2026-07-07
 
 A custom candidate UI can `selectCandidate(i)` and `changePage()`, but there is
 no way to *cancel* a composition or commit the highlighted candidate without
@@ -142,7 +142,7 @@ combos now forwarded while composing, `main` field removed).
 
 ## DX: contributing to the repo
 
-### 13. HMR dev loop for the example
+### 13. HMR dev loop for the example ✅ implemented 2026-07-07
 
 `example` consumes `react-rime` from the built `dist`, so the contributor loop
 is edit → `npm run build` → refresh (the review itself got bitten by a stale
@@ -156,7 +156,7 @@ resolve: { alias: { 'react-rime': path.resolve(__dirname, '../src/index.ts') } }
 (dev only — keep prod builds consuming `dist` so the smoke test exercises the
 real artifact). Instant HMR against library source.
 
-### 14. Root `npm run smoke`
+### 14. Root `npm run smoke` ✅ implemented 2026-07-07
 
 Running the real-WASM test today means knowing to build the lib, then the
 example, then `npx playwright test` from `example/`. One root script that does
@@ -164,7 +164,7 @@ the chain (`npm run build && npm --prefix example run build && npm --prefix
 example exec playwright test`) makes the most valuable test in the repo
 one command.
 
-### 15. `update-worker` script
+### 15. `update-worker` script ✅ implemented 2026-07-07 (CI hook still pending)
 
 Bumping the engine requires editing `DEFAULT_WORKER_URL` *and* re-vendoring
 `src/assets/worker.js` in lockstep (currently enforced by a comment). A script

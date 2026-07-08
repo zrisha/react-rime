@@ -25,6 +25,24 @@ export interface UseRimeOptions extends RimeEngineOptions, UseImeControlOptions 
   onCommit?: (committed: string) => void
 }
 
+/** Consumer handlers merged into {@link UseRime.getInputProps}'s result. */
+export interface RimeInputPropsOverrides<T extends HTMLTextAreaElement | HTMLInputElement> {
+  /** Your own ref to the element; merged with the hook's internal ref. */
+  ref?: React.Ref<T>
+  onChange?: React.ChangeEventHandler<T>
+  onKeyDown?: React.KeyboardEventHandler<T>
+  onKeyUp?: React.KeyboardEventHandler<T>
+}
+
+/** What {@link UseRime.getInputProps} returns — spread it onto your element. */
+export interface RimeInputProps<T extends HTMLTextAreaElement | HTMLInputElement> {
+  ref: React.RefCallback<T>
+  value: string
+  onChange: React.ChangeEventHandler<T>
+  onKeyDown: React.KeyboardEventHandler<T>
+  onKeyUp: React.KeyboardEventHandler<T>
+}
+
 /** Everything {@link useRime} returns. Each field shows its description on hover. */
 export interface UseRime {
   // --- lifecycle ---
@@ -58,6 +76,14 @@ export interface UseRime {
   isLastPage: boolean
 
   // --- input wiring ---
+  /**
+   * One spread wires an input: `<textarea {...rime.getInputProps()} />`.
+   * Binds ref, value, onChange, onKeyDown and onKeyUp; pass your own handlers
+   * or ref via `overrides` and they run after the hook's.
+   */
+  getInputProps: <T extends HTMLTextAreaElement | HTMLInputElement = HTMLTextAreaElement>(
+    overrides?: RimeInputPropsOverrides<T>,
+  ) => RimeInputProps<T>
   /** Attach to your `<textarea>`/`<input>` so commits insert at the caret. */
   inputRef: React.RefObject<HTMLTextAreaElement | HTMLInputElement | null>
   /** Forward your element's `keydown` here to feed keystrokes to the engine. */
@@ -70,6 +96,16 @@ export interface UseRime {
   selectCandidate: (index: number) => Promise<void>
   /** Page through candidates; `true` goes back, `false` goes forward. */
   changePage: (backward: boolean) => Promise<void>
+  /** Cancel the in-progress composition, discarding the preedit (Escape). */
+  cancelComposition: () => Promise<void>
+  /** Commit the currently highlighted candidate (Space). */
+  commitHighlighted: () => Promise<void>
+  /** Commit the preedit as typed, e.g. the raw pinyin letters (Enter). */
+  commitRaw: () => Promise<void>
+  /** Move the candidate highlight to the next candidate (Down). */
+  highlightNext: () => Promise<void>
+  /** Move the candidate highlight to the previous candidate (Up). */
+  highlightPrev: () => Promise<void>
 
   // --- schema & options ---
   /** Id of the active input schema (e.g. `"luna_pinyin"`). */
@@ -113,13 +149,7 @@ export interface UseRime {
  * @example
  * ```tsx
  * const rime = useRime({ schema: 'luna_pinyin' })
- * <textarea
- *   ref={rime.inputRef as React.RefObject<HTMLTextAreaElement>}
- *   value={rime.text}
- *   onChange={(e) => rime.setText(e.target.value)}
- *   onKeyDown={rime.onKeyDown}
- *   onKeyUp={rime.onKeyUp}
- * />
+ * <textarea {...rime.getInputProps()} />
  * ```
  */
 export function useRime(options: UseRimeOptions = {}): UseRime {
@@ -336,6 +366,48 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
     [engine, analyze],
   )
 
+  // Semantic wrappers over the key protocol so pointer-driven UIs never need
+  // to fabricate KeyboardEvents. Each is a no-op unless composing.
+  const sendIfComposing = useCallback(
+    async (rimeKey: string) => {
+      if (!composingRef.current) return
+      await input(rimeKey)
+    },
+    [input],
+  )
+  const cancelComposition = useCallback(() => sendIfComposing('{Escape}'), [sendIfComposing])
+  const commitHighlighted = useCallback(() => sendIfComposing(' '), [sendIfComposing])
+  const commitRaw = useCallback(() => sendIfComposing('{Return}'), [sendIfComposing])
+  const highlightNext = useCallback(() => sendIfComposing('{Down}'), [sendIfComposing])
+  const highlightPrev = useCallback(() => sendIfComposing('{Up}'), [sendIfComposing])
+
+  const getInputProps = useCallback(
+    <T extends HTMLTextAreaElement | HTMLInputElement = HTMLTextAreaElement>(
+      overrides: RimeInputPropsOverrides<T> = {},
+    ): RimeInputProps<T> => ({
+      ref: (el: T | null) => {
+        ;(inputRef as React.MutableRefObject<T | null>).current = el
+        const consumerRef = overrides.ref
+        if (typeof consumerRef === 'function') consumerRef(el)
+        else if (consumerRef) (consumerRef as React.MutableRefObject<T | null>).current = el
+      },
+      value: text,
+      onChange: (e) => {
+        setText(e.target.value)
+        overrides.onChange?.(e)
+      },
+      onKeyDown: (e) => {
+        onKeyDown(e)
+        overrides.onKeyDown?.(e)
+      },
+      onKeyUp: (e) => {
+        onKeyUp(e)
+        overrides.onKeyUp?.(e)
+      },
+    }),
+    [text, onKeyDown, onKeyUp],
+  )
+
   const setSchema = useCallback(
     async (id: string) => {
       try {
@@ -360,11 +432,17 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
     selectLabels,
     page,
     isLastPage,
+    getInputProps,
     inputRef,
     onKeyDown,
     onKeyUp,
     selectCandidate,
     changePage,
+    cancelComposition,
+    commitHighlighted,
+    commitRaw,
+    highlightNext,
+    highlightPrev,
     schema: control.schemaId,
     setSchema,
     schemas: control.schemas,

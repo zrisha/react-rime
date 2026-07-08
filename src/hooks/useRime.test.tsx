@@ -170,6 +170,100 @@ describe('useRime composition', () => {
     expect(seen).toContain('{BackSpace}')
   })
 
+  it('cancelComposition discards the preedit via Escape', async () => {
+    const seen: string[] = []
+    h.processImpl = (key) => {
+      seen.push(key)
+      if (key === '{Escape}') return { state: 2 }
+      return {
+        state: 1,
+        head: '',
+        body: 'n',
+        tail: '',
+        page: 0,
+        isLastPage: true,
+        highlighted: 0,
+        candidates: [{ text: '你' }],
+      }
+    }
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    await act(async () => {
+      result.current.onKeyDown(kbd('n', 'KeyN'))
+    })
+    expect(result.current.composing).toBe(true)
+
+    await act(async () => {
+      await result.current.cancelComposition()
+    })
+    expect(seen).toContain('{Escape}')
+    expect(result.current.composing).toBe(false)
+    expect(result.current.text).toBe('')
+  })
+
+  it('commitHighlighted commits via Space', async () => {
+    h.processImpl = (key) => {
+      if (key === ' ') return { state: 0, committed: '你' }
+      return {
+        state: 1,
+        head: '',
+        body: 'n',
+        tail: '',
+        page: 0,
+        isLastPage: true,
+        highlighted: 0,
+        candidates: [{ text: '你' }],
+      }
+    }
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    await act(async () => {
+      result.current.onKeyDown(kbd('n', 'KeyN'))
+    })
+    await act(async () => {
+      await result.current.commitHighlighted()
+    })
+    expect(result.current.text).toBe('你')
+    expect(result.current.composing).toBe(false)
+  })
+
+  it('composition actions are no-ops when not composing', async () => {
+    const process = vi.fn((): any => ({ state: 3 }))
+    h.processImpl = process
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    await act(async () => {
+      await result.current.cancelComposition()
+      await result.current.commitHighlighted()
+      await result.current.highlightNext()
+    })
+    expect(process).not.toHaveBeenCalled()
+  })
+
+  it('getInputProps wires value, onChange, and key handling', async () => {
+    h.processImpl = () => ({ state: 3 })
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    const consumerKeyDown = vi.fn()
+    const props = result.current.getInputProps({ onKeyDown: consumerKeyDown })
+    expect(props.value).toBe('')
+
+    await act(async () => {
+      props.onChange({ target: { value: 'abc' } } as React.ChangeEvent<HTMLTextAreaElement>)
+    })
+    expect(result.current.text).toBe('abc')
+
+    await act(async () => {
+      props.onKeyDown(kbd('x', 'KeyX') as unknown as React.KeyboardEvent<HTMLTextAreaElement>)
+    })
+    expect(result.current.text).toBe('abcx')
+    expect(consumerKeyDown).toHaveBeenCalled()
+  })
+
   it('toggles English mode on a bare Shift tap, but not around other keys', async () => {
     const { result } = renderHook(() => useRime())
     await waitFor(() => expect(result.current.ready).toBe(true))
