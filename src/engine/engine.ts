@@ -18,8 +18,9 @@ export const DEFAULT_WORKER_URL =
 export interface RimeEngineOptions {
   /**
    * URL of the RIME worker script. Cross-origin URLs (e.g. the default CDN) are
-   * loaded via a blob to satisfy the same-origin worker restriction. Point this
-   * at a self-hosted `react-rime/worker.js` for fully-offline deployments.
+   * loaded via a blob to satisfy the same-origin worker restriction. A
+   * self-hosted `react-rime/worker.js` still streams engine binaries and
+   * dictionaries from jsdelivr (the worker is my_rime's CDN build).
    */
   workerUrl?: string
 }

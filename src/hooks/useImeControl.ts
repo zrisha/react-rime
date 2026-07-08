@@ -58,10 +58,12 @@ export function useImeControl(engine: RimeEngine | null, options: UseImeControlO
   const hideComment: HideComment = useMemo(() => meta.comment[schemaId] ?? false, [meta, schemaId])
   const selectOptions: SelectOption[] = meta.selectOptions
 
-  function setLoading(value: boolean) {
+  // Takes the schema id explicitly: reading `schemaId` here would see the
+  // stale pre-switch value inside selectIME's closure.
+  function setLoading(value: boolean, id: string) {
     setShowVariant(!value)
     setLoadingState(value)
-    setIme(value ? '' : schemaId)
+    setIme(value ? '' : id)
   }
 
   const basicOptionMap = useMemo(
@@ -79,8 +81,10 @@ export function useImeControl(engine: RimeEngine | null, options: UseImeControlO
   const applyVariant = useCallback(
     async (currentSchemaId: string, currentVariantIndex: number) => {
       if (!engine) return
-      const vars = meta.variants[currentSchemaId]
+      // Schemas deployed by the consumer (FS + deploy) have no metadata entry.
+      const vars = meta.variants[currentSchemaId] ?? []
       const active = vars[currentVariantIndex]
+      if (!active) return
       for (const v of vars) {
         if (v.id !== active.id) await engine.setOption(v.id, false)
       }
@@ -92,7 +96,7 @@ export function useImeControl(engine: RimeEngine | null, options: UseImeControlO
   const selectIME = useCallback(
     async (targetIME: string) => {
       if (!engine) return
-      setLoading(true)
+      setLoading(true, targetIME)
       try {
         await engine.setIME(targetIME)
         setSchemaId(targetIME)
@@ -108,14 +112,17 @@ export function useImeControl(engine: RimeEngine | null, options: UseImeControlO
           await engine.setOption(option, box.value)
         }
       } catch (e) {
-        console.error('react-rime: selectIME failed', e)
+        // Rethrow so callers (useRime) can surface it via their error state.
+        setLoadingState(false)
+        throw e instanceof Error ? e : new Error(String(e))
       }
-      setLoading(false)
+      setLoading(false, targetIME)
     },
     [engine, deployed, variantIndexMap, basicOptionMap, applyVariant], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const changeVariant = useCallback(async () => {
+    if (variants.length === 0) return
     const next = (variantIndex + 1) % variants.length
     setVariantIndexMap((m) => ({ ...m, [schemaId]: next }))
     await applyVariant(schemaId, next)

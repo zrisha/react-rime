@@ -31,7 +31,13 @@ test('pinyin round trip: ni hao -> candidates -> commit', async ({ page }) => {
 
   const buffer = page.getByTestId('buffer')
   await expect(buffer).toHaveText(/[一-鿿]/, { timeout: 10_000 })
-  console.log('committed buffer:', await buffer.innerText())
+  const committed = await buffer.innerText()
+  console.log('committed buffer:', committed)
+
+  // Outside a composition, editing keys must keep their native behavior
+  // (regression: Backspace used to be swallowed by the engine gate).
+  await input.press('Backspace')
+  await expect(buffer).toHaveText(committed.slice(0, -1))
 
   expect(errors, `console errors: ${errors.join('\n')}`).toEqual([])
 })

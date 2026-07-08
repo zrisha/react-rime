@@ -32,15 +32,17 @@ vi.mock('../engine/engine', () => {
 
 import { useRime } from './useRime'
 
-function kbd(key: string, code: string): KeyboardEvent {
+type SpyKeyboardEvent = KeyboardEvent & { preventDefault: ReturnType<typeof vi.fn> }
+
+function kbd(key: string, code: string): SpyKeyboardEvent {
   return {
     key,
     code,
-    preventDefault() {},
+    preventDefault: vi.fn(),
     getModifierState() {
       return false
     },
-  } as unknown as KeyboardEvent
+  } as unknown as SpyKeyboardEvent
 }
 
 describe('useRime composition', () => {
@@ -123,5 +125,68 @@ describe('useRime composition', () => {
       result.current.onKeyDown(kbd('x', 'KeyX'))
     })
     expect(result.current.text).toBe('x')
+  })
+
+  it('leaves editing keys alone when not composing (native Backspace)', async () => {
+    const process = vi.fn((): any => ({ state: 3 }))
+    h.processImpl = process
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    const e = kbd('Backspace', 'Backspace')
+    await act(async () => {
+      result.current.onKeyDown(e)
+    })
+    expect(e.preventDefault).not.toHaveBeenCalled()
+    expect(process).not.toHaveBeenCalled()
+  })
+
+  it('routes Backspace to RIME while composing', async () => {
+    const seen: string[] = []
+    h.processImpl = (key) => {
+      seen.push(key)
+      return {
+        state: 1,
+        head: '',
+        body: 'n',
+        tail: '',
+        page: 0,
+        isLastPage: true,
+        highlighted: 0,
+        candidates: [{ text: '你' }],
+      }
+    }
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    await act(async () => {
+      result.current.onKeyDown(kbd('n', 'KeyN'))
+    })
+    const e = kbd('Backspace', 'Backspace')
+    await act(async () => {
+      result.current.onKeyDown(e)
+    })
+    expect(e.preventDefault).toHaveBeenCalled()
+    expect(seen).toContain('{BackSpace}')
+  })
+
+  it('toggles English mode on a bare Shift tap, but not around other keys', async () => {
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(result.current.isEnglish).toBe(false)
+
+    await act(async () => {
+      result.current.onKeyDown(kbd('Shift', 'ShiftLeft'))
+      result.current.onKeyUp(kbd('Shift', 'ShiftLeft'))
+    })
+    await waitFor(() => expect(result.current.isEnglish).toBe(true))
+
+    // Shift used as a modifier (another key pressed in between) must not toggle.
+    await act(async () => {
+      result.current.onKeyDown(kbd('Shift', 'ShiftLeft'))
+      result.current.onKeyDown(kbd('a', 'KeyA'))
+      result.current.onKeyUp(kbd('Shift', 'ShiftLeft'))
+    })
+    expect(result.current.isEnglish).toBe(true)
   })
 })

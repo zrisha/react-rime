@@ -67,8 +67,14 @@ function wrap(s: string): string {
  * Translates a DOM keydown event into a RIME key string.
  * Returns null for keys that should be ignored (standalone modifiers,
  * unrecognised shortcuts, etc.).
+ *
+ * `composing` mirrors my_rime's edit-mode gate: while a composition is active
+ * every key belongs to RIME, but outside one only printable keys (and F4, the
+ * schema menu) are translated — Backspace, Enter, arrows and modifier
+ * shortcuts return null so they keep their native behavior. Pass your
+ * composition state; the default (`true`) translates everything.
  */
-export function toRimeKey(e: KeyboardEvent): string | null {
+export function toRimeKey(e: KeyboardEvent, composing = true): string | null {
   const { code, key } = e
 
   if (key === 'Shift' || key === 'Control' || key === 'Meta') {
@@ -83,6 +89,15 @@ export function toRimeKey(e: KeyboardEvent): string | null {
   const hasShift = e.getModifierState('Shift')
   const isShortcut = hasControl || hasMeta || hasAlt || (hasShift && !isPrintableKey)
 
+  if (!composing) {
+    if (!isPrintableKey && key !== 'F4') {
+      return null
+    }
+    if (isShortcut && !hasShift && !(hasControl && CONTROL_ALLOWLIST.includes(key))) {
+      return null
+    }
+  }
+
   let rimeKey: string | undefined
 
   if (isShortcut || !isPrintableKey) {
@@ -92,10 +107,6 @@ export function toRimeKey(e: KeyboardEvent): string | null {
     }
     if (isAlt && code === 'AltRight') {
       rimeKey = 'Alt_R'
-    }
-    // Reject Control+x unless explicitly allowed.
-    if (hasControl && isPrintableKey && !CONTROL_ALLOWLIST.includes(key) && !hasMeta && !hasAlt) {
-      return null
     }
     const modifiers: string[] = []
     if (hasControl) modifiers.push('Control')
@@ -113,7 +124,7 @@ export function toRimeKey(e: KeyboardEvent): string | null {
 
 /**
  * Translates a DOM keyup event into a RIME Release key string.
- * Returns null if the key should not generate a release event.
+ * Only meaningful while composing; callers gate on their composition state.
  */
 export function toRimeKeyRelease(e: KeyboardEvent): string | null {
   const { key } = e

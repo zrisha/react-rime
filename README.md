@@ -16,6 +16,7 @@ npm install react-rime
 ```
 
 > Requires React 17+ and a browser (the engine runs in a Web Worker).
+> The package is ESM-only.
 
 ## Quick start
 
@@ -134,13 +135,19 @@ configuration: install, import, and it works.**
 - Per-schema dictionaries → `@rime-contrib/*` on jsdelivr, fetched on demand the
   first time a schema is used.
 
-For a fully self-hosted / air-gapped deployment, the package also ships the
-worker at `react-rime/worker.js`. Host it (and the engine binaries) yourself and
-pass the URL:
+If you prefer not to load the worker script cross-origin, the package ships the
+same worker at `react-rime/worker.js` — host it yourself and pass the URL:
 
 ```tsx
 useRime({ workerUrl: '/assets/rime/worker.js' })
 ```
+
+> **Note:** the bundled worker is the CDN build of my_rime's worker: it still
+> streams the engine binaries and dictionaries from jsdelivr (pinned to
+> `@libreservice/my-rime@0.10.9`) regardless of where the worker script itself
+> is hosted. Fully air-gapped deployment is not yet supported — it would
+> require building my_rime's worker with its CDN flag unset so assets resolve
+> relative to the worker URL.
 
 ## How it works
 

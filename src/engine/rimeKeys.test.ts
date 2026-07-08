@@ -71,8 +71,8 @@ describe('toRimeKey', () => {
     expect(toRimeKey(kbd({ key: '0', code: 'Numpad0' }))).toBe('{KP_0}')
   })
 
-  it('rejects disallowed Control combinations but keeps the allowlist', () => {
-    expect(toRimeKey(kbd({ key: 'a', code: 'KeyA', ctrl: true }))).toBeNull()
+  it('forwards Control combinations to RIME while composing', () => {
+    expect(toRimeKey(kbd({ key: 'a', code: 'KeyA', ctrl: true }))).toBe('{Control+a}')
     expect(toRimeKey(kbd({ key: '`', code: 'Backquote', ctrl: true }))).toBe('{Control+quoteleft}')
   })
 
@@ -83,6 +83,28 @@ describe('toRimeKey', () => {
 
   it('distinguishes right Alt', () => {
     expect(toRimeKey(kbd({ key: 'Alt', code: 'AltRight', alt: true }))).toBe('{Alt_R}')
+  })
+})
+
+describe('toRimeKey outside a composition (composing = false)', () => {
+  it('lets editing and navigation keys keep native behavior', () => {
+    expect(toRimeKey(kbd({ key: 'Backspace', code: 'Backspace' }), false)).toBeNull()
+    expect(toRimeKey(kbd({ key: 'Enter', code: 'Enter' }), false)).toBeNull()
+    expect(toRimeKey(kbd({ key: 'ArrowLeft', code: 'ArrowLeft' }), false)).toBeNull()
+    expect(toRimeKey(kbd({ key: 'Home', code: 'Home' }), false)).toBeNull()
+  })
+
+  it('lets modifier shortcuts (copy/paste) keep native behavior', () => {
+    expect(toRimeKey(kbd({ key: 'c', code: 'KeyC', meta: true }), false)).toBeNull()
+    expect(toRimeKey(kbd({ key: 'a', code: 'KeyA', ctrl: true }), false)).toBeNull()
+    expect(toRimeKey(kbd({ key: 'v', code: 'KeyV', alt: true }), false)).toBeNull()
+  })
+
+  it('still forwards printable keys, F4, and the Control allowlist', () => {
+    expect(toRimeKey(kbd({ key: 'n', code: 'KeyN' }), false)).toBe('n')
+    expect(toRimeKey(kbd({ key: '?', code: 'Slash', shift: true }), false)).toBe('?')
+    expect(toRimeKey(kbd({ key: 'F4', code: 'F4' }), false)).toBe('{F4}')
+    expect(toRimeKey(kbd({ key: '`', code: 'Backquote', ctrl: true }), false)).toBe('{Control+quoteleft}')
   })
 })
 
