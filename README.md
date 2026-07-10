@@ -87,7 +87,7 @@ import { RimeProvider, RimeTextarea, CandidatePanel } from 'react-rime'
 
 | Option        | Type     | Default        | Description                                  |
 | ------------- | -------- | -------------- | -------------------------------------------- |
-| `schema`      | string   | `luna_pinyin`  | Initial schema id (see `DEFAULT_SCHEMA_ID`). |
+| `schema`      | string   | `luna_pinyin`  | Initial schema id — autocompletes the bundled ids ([full list](docs/SCHEMAS.md)). |
 | `workerUrl`   | string   | jsdelivr CDN   | Override the worker script (see Assets).     |
 | `defaultText` | string   | `''`           | Initial committed-text buffer.               |
 | `onCommit`    | function | —              | Called with each committed string.           |
@@ -119,6 +119,51 @@ import { RimeProvider, RimeTextarea, CandidatePanel } from 'react-rime'
 | `variant` / `changeVariant()` | Script variant (e.g. 简/繁) and cycler.           |
 
 Everything the components do is available here — you never have to use them.
+For caret-positioned panels, Next.js/SSR, fully custom candidate UIs, and
+CSP requirements, see [docs/RECIPES.md](docs/RECIPES.md).
+
+## Keyboard behavior
+
+These are RIME's default bindings, inherited from the engine (schemas can
+remap them). Your users hit them immediately, so they're worth surfacing in
+your UI's help text.
+
+**While composing** (a preedit is showing):
+
+| Key | Action |
+| --- | --- |
+| letters | Extend the preedit |
+| `Space` | Commit the highlighted candidate |
+| `1`–`9` | Commit a candidate by label |
+| `Enter` | Commit the raw input as typed (e.g. the pinyin letters) |
+| `Escape` | Cancel the composition |
+| `Backspace` | Delete the last input character |
+| `↓` / `↑` | Move the candidate highlight |
+| `←` / `→` | Move the cursor inside the preedit |
+| `-` / `=`, `PageUp` / `PageDown` | Previous / next candidate page |
+
+**When not composing**, printable keys start a composition (unless English
+mode is on) and everything else — editing keys, arrows, OS shortcuts — keeps
+its native behavior. Two global gestures: a bare `Shift` tap toggles
+English ⇄ Chinese, and `F4` or `` Ctrl+` `` opens RIME's schema menu.
+
+All of these also exist as methods (`commitHighlighted()`,
+`cancelComposition()`, `changePage()`, …) so pointer-driven UIs don't need a
+keyboard.
+
+## Lifecycle & loading
+
+- `loading` is `true` while the engine boots or switches schema; `ready`
+  flips `true` once the initial schema is active; `error` is set if the
+  worker fails to load or a schema fails to activate.
+- **First load streams ~3.5 MB** (engine core + the schema's dictionary)
+  from jsdelivr, typically a few seconds on broadband. Everything is cached
+  in **IndexedDB**, so later loads work offline and take well under a second.
+- Switching to a schema whose dictionary hasn't been used before streams that
+  dictionary on demand; `loading` covers the gap.
+- Option toggles (full-width, punctuation, emoji, extended charset) persist
+  to `localStorage` under the same keys the official my-rime PWA uses, so an
+  embedded my-rime and your app share settings on the same origin.
 
 ## Assets & offline use
 

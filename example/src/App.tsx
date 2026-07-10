@@ -21,9 +21,11 @@ export function App() {
         <span className="status" data-testid="status">
           {rime.error
             ? `error: ${rime.error.message}`
-            : rime.ready
-              ? 'ready'
-              : 'loading engine…'}
+            : !rime.ready
+              ? 'loading engine…'
+              : rime.loading
+                ? 'loading schema…'
+                : 'ready'}
         </span>
       </div>
 

@@ -44,7 +44,7 @@ Each is ~3 lines, and together they make the hook genuinely headless: a
 pointer-driven UI (mobile toolbar, mouse-only picker) needs zero keyboard
 event fabrication.
 
-### 3. Typed schema ids
+### 3. Typed schema ids ✅ implemented 2026-07-09
 
 `schema: 'luna_pinyin'` is a bare string; consumers can't discover valid ids
 without opening `schemas.json`. Generate a union type from it
@@ -53,7 +53,7 @@ without opening `schemas.json`. Generate a union type from it
 still pass, and export the list as a value (`SCHEMA_IDS`). Autocomplete on the
 main option is a big first-run win.
 
-### 4. Stable function identities
+### 4. Stable function identities ✅ implemented 2026-07-09
 
 `useImeControl` returns a fresh object and fresh toggle closures every render,
 which cascades into `onKeyDown`/`onKeyUp`/`analyze` being rebuilt per render.
@@ -63,7 +63,7 @@ refs for volatile values (useEvent pattern). This was deferred from the review
 as "not a correctness bug" — but it's really a DX item: it's the difference
 between a hook people fight and one that behaves like the ecosystem expects.
 
-### 5. Dev-mode warnings
+### 5. Dev-mode warnings ✅ implemented 2026-07-09
 
 Cheap `console.warn`s behind `process.env.NODE_ENV !== 'production'`:
 
@@ -79,14 +79,14 @@ half-works" into a one-line explanation.
 
 ## DX: documentation
 
-### 6. Document the schemas you ship
+### 6. Document the schemas you ship ✅ implemented 2026-07-09 (docs/SCHEMAS.md)
 
 Nothing lists what's actually available. A README (or docs/) table generated
 from `schemas.json` — id, name, group, variants, extended-charset support —
 plus one sentence on what each family *is* (Pinyin vs. double Pinyin vs. Wubi
 vs. Cangjie…). This is the #1 question every consumer has in minute two.
 
-### 7. Keyboard behavior reference
+### 7. Keyboard behavior reference ✅ implemented 2026-07-09 (README)
 
 A table of what keys mean *while composing*: Space commits highlighted, digits
 select by label, `-`/`=` and PageUp/Down page, arrows move highlight/cursor,
@@ -95,7 +95,7 @@ Ctrl+` opens the schema menu. None of this is written down anywhere — it's
 inherited RIME behavior the consumer's users will hit immediately, and the
 consumer needs it to build help UI.
 
-### 8. Lifecycle & performance expectations
+### 8. Lifecycle & performance expectations ✅ implemented 2026-07-09 (README)
 
 Document the load story: what `loading`/`ready`/`error` mean, that first use
 streams ~3.5 MB core + per-schema dictionaries from jsdelivr, that everything
@@ -104,7 +104,7 @@ after a schema switch can lag while a dictionary streams in. Also which
 settings persist to localStorage (and the my-rime key-sharing described in
 §14).
 
-### 9. Cookbook recipes
+### 9. Cookbook recipes ✅ implemented 2026-07-09 (docs/RECIPES.md; `getCaretRect` helper not shipped)
 
 Short, copy-pasteable:
 
@@ -134,7 +134,7 @@ Deploy `example/dist` to GitHub Pages via Actions and link it from the README.
 For a *text-input* library, trying it in 5 seconds beats any amount of prose;
 it's also the strongest "does this actually work" signal for evaluators.
 
-### 12. CHANGELOG.md
+### 12. CHANGELOG.md ✅ implemented 2026-07-09
 
 Even a hand-maintained one. The review just changed key-handling behavior in
 ways an early adopter would want called out (`toRimeKey` signature, Control
@@ -172,14 +172,14 @@ that takes a version, downloads the CDN worker, writes both, and diffs —
 plus a CI check that the vendored file byte-matches the pinned URL — turns the
 comment into a guarantee.
 
-### 16. ESLint (it isn't configured)
+### 16. ESLint ✅ implemented 2026-07-09
 
 The source carries `eslint-disable react-hooks/exhaustive-deps` comments but
 no ESLint exists, so nothing checks the other hooks rules. `eslint` +
 `eslint-plugin-react-hooks` would catch dep-array drift — the exact bug class
 behind the stale-`ime` finding.
 
-### 17. Tests where the review found bugs
+### 17. Tests where the review found bugs ✅ partially 2026-07-09 (useImeControl unit tests + SSR test; smoke-test coverage of schema switching/shift-tap and CI still pending)
 
 `useImeControl` has no direct tests (schema-switch option re-sync,
 `syncOptions`, variant cycling); an SSR test (`renderToString` under a node
