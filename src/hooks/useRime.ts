@@ -135,6 +135,10 @@ export interface UseRime {
   isEnglishPunctuation: boolean
   /** Toggle ASCII vs. Chinese punctuation. */
   changePunctuation: () => Promise<void>
+  /** `true` when the extended charset (rare CJK blocks) is enabled. Persisted to localStorage. */
+  isExtendedCharset: boolean
+  /** Toggle the extended charset on/off. */
+  changeCharset: () => Promise<void>
   /** `true` when emoji suggestions are enabled. Persisted to localStorage. */
   enableEmoji: boolean
   /** Toggle emoji suggestions on/off (the old my-rime emoji button). */
@@ -476,6 +480,8 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
       changeWidth: control.changeWidth,
       isEnglishPunctuation: control.isEnglishPunctuation,
       changePunctuation: control.changePunctuation,
+      isExtendedCharset: control.isExtendedCharset,
+      changeCharset: control.changeCharset,
       enableEmoji: control.enableEmoji,
       changeEmoji: control.changeEmoji,
       hideComment: control.hideComment,
