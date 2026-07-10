@@ -9,6 +9,8 @@ const lib = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 // consumes the built package from ../dist like a real consumer would.
 export default defineConfig(({ command }) => ({
   plugins: [react()],
+  // GitHub Pages serves the demo from /<repo>/ (set by the deploy workflow).
+  base: process.env.EXAMPLE_BASE ?? '/',
   ...(command === 'serve'
     ? {
         resolve: {

@@ -1,0 +1,51 @@
+# Deploys the example app to GitHub Pages as a live demo.
+# One-time setup: repo Settings → Pages → Source: "GitHub Actions".
+name: Deploy demo to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            example/package-lock.json
+      # Root install runs `prepare`, which builds dist/ — the example's
+      # file:.. dependency consumes that build.
+      - run: npm ci
+      - run: npm ci --prefix example
+      - run: npm run build --prefix example
+        env:
+          # Pages serves from /<repo>/, not the domain root.
+          EXAMPLE_BASE: /${{ github.event.repository.name }}/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: example/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

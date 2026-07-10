@@ -128,7 +128,7 @@ because the full surface is ~30 fields). TypeDoc (or typedoc-plugin-markdown
 into docs/) turns the existing comments into a complete reference for free —
 the writing is already done.
 
-### 11. Live demo
+### 11. Live demo ✅ implemented 2026-07-09 (workflow added; enable Pages once: repo Settings → Pages → Source "GitHub Actions")
 
 Deploy `example/dist` to GitHub Pages via Actions and link it from the README.
 For a *text-input* library, trying it in 5 seconds beats any amount of prose;

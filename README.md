@@ -11,6 +11,8 @@ this is ported from — into a standalone, headless library: same WASM engine
 and behavior, no UI included. The hooks are the whole API; a few optional,
 fully-unstyled components are provided for a faster start.
 
+**[Try the live demo →](https://zrisha.github.io/react-rime/)**
+
 ```bash
 npm install react-rime
 ```
