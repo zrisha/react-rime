@@ -115,8 +115,9 @@ const rime = useRime()
 ```
 
 `hideComment` is `'emoji'` for schemas whose comments duplicate emoji
-suggestions — check it before rendering comments (see `CandidatePanel.tsx`
-for the exact rule).
+suggestions. The exact rule: show `candidate.comment` when
+`hideComment === false`, or when `hideComment === 'emoji'` and the candidate
+text is not itself an emoji (`!/\p{Emoji}/u.test(candidate.text)`).
 
 ## Content-Security-Policy
 

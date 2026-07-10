@@ -198,18 +198,19 @@ Options: prefix with a one-time legacy-key migration; document sharing as a
 feature; or add a `storage`/`persist: false` option so consumers own
 persistence (also fixes two `useRime` instances overwriting each other).
 
-### 19. Components: keep or cut
+### 19. Components: keep or cut ✅ resolved 2026-07-09: cut
 
-If kept: a11y work (`role="listbox"`, `aria-activedescendant`, focus
-management) and possibly a `react-rime/components` subpath so the core stays
-lean. If cut: fold the `data-rime-*` conventions into README recipes.
+`RimeTextarea`, `CandidatePanel`, `SchemaSelector` removed pre-release:
+`getInputProps()` made them one-liners to hand-roll, and keeping them meant
+owning the a11y work. `RimeProvider`/`useRimeContext` (engine sharing, not UI)
+stayed. The headless equivalents live in docs/RECIPES.md and the example app.
 
 ## Robustness backlog (lower priority)
 
-- **Multiple inputs per provider**: two `RimeTextarea`s under one
-  `RimeProvider` share one `inputRef`; the last-mounted wins and commits land
-  in it regardless of focus. Track the focused element or document
-  one-input-per-provider.
+- **Multiple inputs per provider**: two elements spreading `getInputProps()`
+  under one `RimeProvider` share one `inputRef`; the last-mounted wins and
+  commits land in it regardless of focus. Track the focused element instead
+  (currently documented as one-input-per-provider in README/RECIPES).
 - **Android/mobile**: upstream's Android Chromium handling (`Unidentified`
   keydowns reconstructed from `input` events) was not ported; the hook is
   desktop-keyboard-only. Port it or document the limitation.

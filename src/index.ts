@@ -13,14 +13,8 @@ export type {
 export { useImeControl } from './hooks/useImeControl'
 export type { ImeControl, UseImeControlOptions } from './hooks/useImeControl'
 
-// Optional context + unstyled components
-export { RimeProvider, useRimeContext } from './components/context'
-export { RimeTextarea } from './components/RimeTextarea'
-export type { RimeTextareaProps } from './components/RimeTextarea'
-export { CandidatePanel } from './components/CandidatePanel'
-export type { CandidatePanelProps, CandidateInfo } from './components/CandidatePanel'
-export { SchemaSelector } from './components/SchemaSelector'
-export type { SchemaSelectorProps } from './components/SchemaSelector'
+// Optional context for sharing one engine across components
+export { RimeProvider, useRimeContext } from './context'
 
 // Engine layer (for custom integrations)
 export {

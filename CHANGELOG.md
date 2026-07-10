@@ -16,6 +16,11 @@ tracking the repo:
   behavior).
 - **Bare Shift tap** toggles English mode (the standard IME gesture).
 - **ESM-only package** — the `main` field was removed; use `import`.
+- **Hooks-only: the unstyled components were removed** (`RimeTextarea`,
+  `CandidatePanel`, `SchemaSelector`). `getInputProps()` makes them
+  one-liners to hand-roll, and keeping them meant owning an a11y surface the
+  headless API doesn't have — see docs/RECIPES.md for equivalents.
+  `RimeProvider` / `useRimeContext` (engine sharing) remain.
 - **`react-dom` peer dependency dropped** (never used).
 - **Stable identities** — every function returned by `useRime` /
   `useImeControl` keeps one identity for the component's lifetime; the

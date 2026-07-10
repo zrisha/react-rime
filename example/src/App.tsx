@@ -1,8 +1,9 @@
-import { useRime, RimeTextarea, CandidatePanel, SchemaSelector } from 'react-rime'
+import { useRime } from 'react-rime'
 import './app.css'
 
 export function App() {
-  // The whole library surface is this one hook. Components below are optional.
+  // The whole library surface is this one hook; every element below is plain
+  // JSX wired to it — the recommended (headless) integration.
   const rime = useRime()
 
   return (
@@ -16,7 +17,23 @@ export function App() {
       <div className="row">
         <label>
           Schema:&nbsp;
-          <SchemaSelector rime={rime} />
+          <select value={rime.schema} onChange={(e) => void rime.setSchema(e.target.value)}>
+            {rime.schemas.map((opt) =>
+              'children' in opt ? (
+                <optgroup key={opt.key} label={opt.label}>
+                  {opt.children.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ),
+            )}
+          </select>
         </label>
         <span className="status" data-testid="status">
           {rime.error
@@ -30,8 +47,8 @@ export function App() {
       </div>
 
       <div className="editor">
-        <RimeTextarea
-          rime={rime}
+        <textarea
+          {...rime.getInputProps()}
           rows={6}
           placeholder="Type here…"
           data-testid="input"
@@ -43,7 +60,47 @@ export function App() {
             {rime.preedit.tail}
           </div>
         )}
-        <CandidatePanel rime={rime} className="candidates" data-testid="candidates" />
+        {rime.composing && rime.candidates.length > 0 && (
+          <div data-rime-candidates="" data-testid="candidates">
+            {rime.candidates.map((candidate, index) => {
+              // Schemas mark comments that duplicate emoji suggestions with
+              // hideComment: 'emoji'; skip those for candidates that are emoji.
+              const showComment =
+                !!candidate.comment &&
+                (rime.hideComment === false ||
+                  (rime.hideComment === 'emoji' && !/\p{Emoji}/u.test(candidate.text)))
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  data-rime-candidate=""
+                  data-highlighted={index === rime.highlighted || undefined}
+                  onClick={() => void rime.selectCandidate(index)}
+                >
+                  <span data-rime-label="">{rime.selectLabels?.[index] ?? index + 1}</span>
+                  <span data-rime-text="">{candidate.text}</span>
+                  {showComment && <span data-rime-comment="">{candidate.comment}</span>}
+                </button>
+              )
+            })}
+            <button
+              type="button"
+              data-rime-page="prev"
+              disabled={rime.page === 0}
+              onClick={() => void rime.changePage(true)}
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              data-rime-page="next"
+              disabled={rime.isLastPage}
+              onClick={() => void rime.changePage(false)}
+            >
+              ›
+            </button>
+          </div>
+        )}
       </div>
 
       <pre className="buffer" data-testid="buffer">

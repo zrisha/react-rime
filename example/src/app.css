@@ -59,7 +59,7 @@ textarea {
   border-bottom: 2px solid #0066cc;
 }
 
-/* The library renders unstyled candidates with data attributes. */
+/* The example marks its candidate elements with data attributes for styling. */
 [data-rime-candidates] {
   display: flex;
   flex-wrap: wrap;

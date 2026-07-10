@@ -14,7 +14,7 @@ an app — the deliverable is the library.
 
 - ✅ Headless `useRime` hook (composition state machine + key handling + text buffer)
 - ✅ `useImeControl` (schema / options / variants), `useDeployStatus` folded into the engine
-- ✅ Optional unstyled components: `RimeProvider`, `RimeTextarea`, `CandidatePanel`, `SchemaSelector`
+- ✅ Optional `RimeProvider` / `useRimeContext` for sharing one engine (the unstyled UI components were cut pre-release — hooks-only, see CHANGELOG)
 - ✅ SSR-safe engine factory with cross-origin blob-worker loading
 - ✅ 15 unit tests (key translation + composition reducer via mock engine)
 - ✅ Real-WASM Playwright smoke test passes (`nihao` → 你好 over jsdelivr)
@@ -43,14 +43,15 @@ npx playwright test    # automated round-trip smoke test
 key events to RIME key strings; `schema-metadata.ts` turns `schemas.json` into
 UI metadata; `types.ts` holds the `RimeResult` union. `src/hooks/useRime.ts` is
 the primary surface — it creates the engine, runs the composition reducer over
-each `RimeResult`, and re-exports `useImeControl`. `src/components/` are thin,
-unstyled wrappers over the hook. Data flow:
+each `RimeResult`, and re-exports `useImeControl`. `src/context.tsx` shares one
+`useRime` instance via React context. Data flow:
 `KeyboardEvent → toRimeKey() → worker.process() → RimeResult → reducer → UI`.
 
 ## Key decisions (and why)
 
-- **Hooks are the API; components are optional.** Components never hide hook
-  capability.
+- **Hooks are the whole API.** The unstyled components were cut before release:
+  `getInputProps()` made them one-liners to hand-roll, and keeping them meant
+  owning an a11y surface. `RimeProvider` (engine sharing) stayed.
 - **Hybrid assets.** Bundle the ~20KB worker; stream the large binaries
   (rime.wasm/.data ≈3.5MB + per-schema dicts) from jsdelivr, cached offline in
   IndexedDB — the same model as the my-rime PWA. Zero-config install; override

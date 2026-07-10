@@ -8,8 +8,7 @@ and no manual asset wiring.
 `react-rime` extracts the engine and control logic from
 [my-rime](https://github.com/LibreService/my_rime) — the Chinese-input PWA
 this is ported from — into a standalone, headless library: same WASM engine
-and behavior, no UI included. The hooks are the whole API; a few optional,
-fully-unstyled components are provided for a faster start.
+and behavior, no UI included. The hooks are the whole API — you bring the UI.
 
 **[Try the live demo →](https://zrisha.github.io/react-rime/)**
 
@@ -52,36 +51,27 @@ export function Editor() {
 }
 ```
 
-## With the optional components
+## Sharing one engine across components
 
-The same thing, less boilerplate. The components render unstyled elements with
-`data-rime-*` attributes you can target in CSS:
+`useRime()` owns an engine per call. When several components need the same
+one — an editor plus a status bar or toolbar — wrap them in `RimeProvider`
+and read the instance with `useRimeContext()`:
 
 ```tsx
-import { useRime, RimeTextarea, CandidatePanel, SchemaSelector } from 'react-rime'
+import { RimeProvider, useRimeContext } from 'react-rime'
 
-export function Editor() {
-  const rime = useRime()
-  return (
-    <>
-      <SchemaSelector rime={rime} />
-      <RimeTextarea rime={rime} rows={6} />
-      <CandidatePanel rime={rime} />
-    </>
-  )
+<RimeProvider schema="wubi86">
+  <Editor />
+  <StatusBar />
+</RimeProvider>
+
+function StatusBar() {
+  const rime = useRimeContext()
+  return <button onClick={rime.changeLanguage}>{rime.isEnglish ? 'EN' : '中'}</button>
 }
 ```
 
-Prefer context over prop-drilling? Wrap once and drop the `rime` prop:
-
-```tsx
-import { RimeProvider, RimeTextarea, CandidatePanel } from 'react-rime'
-
-<RimeProvider schema="wubi86">
-  <RimeTextarea rows={6} />
-  <CandidatePanel />
-</RimeProvider>
-```
+Exactly one input under the provider should spread `getInputProps()`.
 
 ## `useRime(options)`
 
@@ -120,7 +110,6 @@ import { RimeProvider, RimeTextarea, CandidatePanel } from 'react-rime'
 | `changeLanguage()`        | Toggle ASCII (English) mode.                          |
 | `variant` / `changeVariant()` | Script variant (e.g. 简/繁) and cycler.           |
 
-Everything the components do is available here — you never have to use them.
 For caret-positioned panels, Next.js/SSR, fully custom candidate UIs, and
 CSP requirements, see [docs/RECIPES.md](docs/RECIPES.md).
 
