@@ -1,6 +1,7 @@
 // Maps DOM KeyboardEvents to RIME key strings.
 // Logic extracted verbatim from my_rime's MyPanel.vue; no framework deps.
 
+/** DOM `KeyboardEvent.key` → RIME key name, for the keys whose names differ. */
 export const RIME_KEY_MAP: { [key: string]: string | undefined } = {
   Escape: 'Escape',
   F4: 'F4',
@@ -55,6 +56,7 @@ export const RIME_KEY_MAP: { [key: string]: string | undefined } = {
 // Control+key combos are normally suppressed, except these pass through to RIME.
 const CONTROL_ALLOWLIST = ['`']
 
+/** Whether `key` is a single printable ASCII character (letter, digit, punctuation, space). */
 export function isPrintable(key: string): boolean {
   return /^[a-z0-9!"#$%&'()*+,./:;<=>?@[\] ^_`{|}~\\-]$/i.test(key)
 }

@@ -12,7 +12,8 @@ import {
 import { toRimeKey, toRimeKeyRelease, isPrintable } from '../engine/rimeKeys'
 import { devWarn } from '../engine/devWarn'
 import { EMPTY_PREEDIT, type Preedit, type RimeCandidate, type RimeResult } from '../engine/types'
-import { useImeControl, type UseImeControlOptions } from './useImeControl'
+import { useImeControl, type ImeControl, type UseImeControlOptions } from './useImeControl'
+import type { SchemaId } from '../engine/schema-ids'
 
 type AnyKeyboardEvent = KeyboardEvent | { nativeEvent: KeyboardEvent }
 
@@ -112,14 +113,14 @@ export interface UseRime {
   // --- schema & options ---
   /** Id of the active input schema (e.g. `"luna_pinyin"`). */
   schema: string
-  /** Switch to a different schema by id. */
-  setSchema: (id: string) => Promise<void>
+  /** Switch to a different schema by id (autocompletes the bundled ids). */
+  setSchema: (id: SchemaId | (string & {})) => Promise<void>
   /** Grouped options for building a schema `<select>`. */
-  schemas: ReturnType<typeof useImeControl>['schemas']
+  schemas: ImeControl['schemas']
   /** Script variants available for the active schema (e.g. 简/繁). */
-  variants: ReturnType<typeof useImeControl>['variants']
+  variants: ImeControl['variants']
   /** The currently active script variant. */
-  variant: ReturnType<typeof useImeControl>['variant']
+  variant: ImeControl['variant']
   /** Cycle to the next script variant (e.g. toggle 简 ⇄ 繁). */
   changeVariant: () => Promise<void>
   /** `true` when ASCII (English) mode is on. */
@@ -139,7 +140,7 @@ export interface UseRime {
   /** Toggle emoji suggestions on/off (the old my-rime emoji button). */
   changeEmoji: () => Promise<void>
   /** Whether/which candidate comments the active schema hides (`false` | `'emoji'`). */
-  hideComment: ReturnType<typeof useImeControl>['hideComment']
+  hideComment: ImeControl['hideComment']
 }
 
 /**

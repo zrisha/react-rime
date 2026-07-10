@@ -2,7 +2,14 @@
 // Vue ref/computed/watchEffect → React useState/useMemo/useEffect, and the
 // module-level singleton worker → an injected engine instance.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react'
 import { useEventCallback } from './useEventCallback'
 import type { RimeEngine } from '../engine/engine'
 import {
@@ -41,7 +48,85 @@ export interface UseImeControlOptions {
   schema?: SchemaId | (string & {})
 }
 
-export function useImeControl(engine: RimeEngine | null, options: UseImeControlOptions = {}) {
+/** Everything {@link useImeControl} returns. {@link useRime} re-exposes most of it. */
+export interface ImeControl {
+  // --- schema ---
+  /** Id of the active schema (the target id while a switch is in flight). */
+  schemaId: string
+  /** Grouped options for building a schema `<select>`, from the bundled metadata. */
+  schemas: SelectOption[]
+  /** `true` while a schema switch is in progress. */
+  loading: boolean
+  /**
+   * Id of the fully configured schema: empty while a switch is in flight,
+   * equal to {@link schemaId} once its options are re-synced.
+   */
+  ime: string
+  /** Activate a schema by id, re-syncing options (librime resets them on switch). */
+  selectIME: (id: SchemaId | (string & {})) => Promise<void>
+  /** Alias of {@link selectIME} (the name {@link useRime} exposes). */
+  setSchema: (id: SchemaId | (string & {})) => Promise<void>
+
+  // --- deploy (custom schemas) ---
+  /**
+   * `true` once the engine has run a full deploy (consumer-deployed schemas).
+   * Variant/option state is then engine-driven instead of metadata-driven.
+   */
+  deployed: boolean
+  /** Flip {@link deployed}; wired to the engine's deploy events by {@link useRime}. */
+  setDeployed: Dispatch<SetStateAction<boolean>>
+
+  // --- script variants (e.g. 简/繁) ---
+  /** Script variants available for the active schema. */
+  variants: Variant[]
+  /** The currently active script variant, if the schema has any. */
+  variant: Variant | undefined
+  /** Index of {@link variant} within {@link variants}. */
+  variantIndex: number
+  /** Cycle to the next script variant (e.g. toggle 简 ⇄ 繁). */
+  changeVariant: () => Promise<void>
+  /** `false` while switching schema — hide variant UI until the switch settles. */
+  showVariant: boolean
+
+  // --- options ---
+  /** `true` when ASCII (English) mode is on. */
+  isEnglish: boolean
+  /** Toggle ASCII (English) mode on/off. */
+  changeLanguage: () => Promise<void>
+  /** `true` when full-width character mode is on. Persisted to localStorage. */
+  isFullWidth: boolean
+  /** Toggle full-width vs. half-width characters. */
+  changeWidth: () => Promise<void>
+  /** `true` when the extended charset (rare CJK blocks) is enabled. Persisted. */
+  isExtendedCharset: boolean
+  /** Toggle the extended charset on/off. */
+  changeCharset: () => Promise<void>
+  /** `true` when punctuation is in ASCII (English) form. Persisted. */
+  isEnglishPunctuation: boolean
+  /** Toggle ASCII vs. Chinese punctuation. */
+  changePunctuation: () => Promise<void>
+  /** `true` when emoji suggestions are enabled. Persisted to localStorage. */
+  enableEmoji: boolean
+  /** Toggle emoji suggestions on/off. */
+  changeEmoji: () => Promise<void>
+  /** Whether/which candidate comments the active schema hides (`false` | `'emoji'`). */
+  hideComment: HideComment
+  /**
+   * Apply option updates pushed by the engine (`updatedOptions` on a
+   * {@link RimeResult}; a `!` prefix means the option turned off).
+   */
+  syncOptions: (updatedOptions: string[]) => void
+}
+
+/**
+ * Schema, option, and variant state for an engine you own. {@link useRime}
+ * composes this and re-exposes most of it — reach for it directly only with a
+ * custom `createRimeEngine` integration.
+ */
+export function useImeControl(
+  engine: RimeEngine | null,
+  options: UseImeControlOptions = {},
+): ImeControl {
   const meta = useMemo(() => buildSchemaMetadata(), [])
 
   const [schemaId, setSchemaId] = useState<string>(options.schema ?? DEFAULT_SCHEMA_ID)
@@ -249,5 +334,3 @@ export function useImeControl(engine: RimeEngine | null, options: UseImeControlO
     ],
   )
 }
-
-export type ImeControl = ReturnType<typeof useImeControl>

@@ -21,6 +21,7 @@ export type RimeAccepted = {
   isLastPage: boolean
   /** Index of the currently highlighted candidate. */
   highlighted: number
+  /** Schema-provided selection labels; render 1–9 when absent. */
   selectLabels?: string[]
   candidates: RimeCandidate[]
 }
@@ -37,6 +38,7 @@ export type RimeUnhandled = {
 }
 
 export type RimeUpdatedOptions = {
+  /** Option changes pushed by the engine: `"ascii_mode"` = on, `"!full_shape"` = off. */
   updatedOptions?: string[]
 }
 
@@ -45,6 +47,7 @@ export type RimeCandidate = {
   comment?: string
 }
 
+/** Parsed response from `RimeEngine.process` — discriminate on `state`. */
 export type RimeResult = (
   | RimeCommitted
   | RimeAccepted

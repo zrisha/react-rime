@@ -10,11 +10,17 @@ export interface CandidatePanelProps extends HTMLAttributes<HTMLDivElement> {
   renderCandidate?: (candidate: RimeCandidate, info: CandidateInfo) => React.ReactNode
 }
 
+/** Second argument to {@link CandidatePanelProps.renderCandidate}. */
 export interface CandidateInfo {
+  /** Index of the candidate on the current page. */
   index: number
+  /** Selection label to show (schema-provided, or `"1"`–`"9"`). */
   label: string
+  /** `true` for the candidate the engine currently highlights. */
   highlighted: boolean
+  /** `true` when the comment should be rendered (respects the schema's `hideComment`). */
   showComment: boolean
+  /** Commit this candidate (also refocuses the input). */
   select: () => void
 }
 

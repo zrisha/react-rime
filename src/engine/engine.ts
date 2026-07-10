@@ -28,17 +28,37 @@ export interface RimeEngineOptions {
   workerUrl?: string
 }
 
+/** Typed handle to a RIME worker. The hooks drive this for you; it's exported for custom integrations. */
 export interface RimeEngine {
+  /** Activate a schema by id, streaming its dictionary on first use. */
   setIME(ime: string): Promise<void>
+  /** Set a runtime option, e.g. `'ascii_mode'`, `'full_shape'`, `'simplification'`. */
   setOption(option: string, value: boolean): Promise<void>
+  /** Set how many candidates each page holds. */
   setPageSize(size: number): Promise<void>
+  /** Run a full RIME deploy — needed after writing schema files via {@link FS}. Progress arrives via {@link onDeployStatus}. */
   deploy(): Promise<void>
+  /** Feed one RIME key string (see `toRimeKey`) and get the parsed result. */
   process(input: string): Promise<RimeResult>
+  /**
+   * Commit the candidate at `index` on the current page. Unlike
+   * {@link process}, resolves with the *raw JSON* of a {@link RimeResult} —
+   * `JSON.parse` it (worker-protocol quirk, kept for my_rime compatibility).
+   */
   selectCandidateOnCurrentPage(index: number): Promise<string>
+  /**
+   * Page through candidates (`true` = back). Resolves with raw
+   * {@link RimeResult} JSON, like {@link selectCandidateOnCurrentPage}.
+   */
   changePage(backward: boolean): Promise<string>
+  /** Wipe RIME's user directory: learned words and consumer-deployed files. */
   resetUserDirectory(): Promise<void>
+  /** Async view of the worker's filesystem — write custom schema sources here, then {@link deploy}. */
   FS: ReturnType<typeof asyncFS>
-  /** Subscribe to deploy lifecycle events emitted by the engine. */
+  /**
+   * Subscribe to deploy lifecycle events. `status` is `'start'`, `'success'`
+   * or `'failure'`; on success `schemas` lists the deployed schema ids.
+   */
   onDeployStatus(handler: (status: string, schemas: string[]) => void): void
   /** Terminate the worker and release resources. */
   dispose(): void
@@ -62,6 +82,12 @@ async function resolveWorkerUrl(src: string): Promise<{ url: string; isBlob: boo
   return { url: blobUrl, isBlob: true }
 }
 
+/**
+ * Spawn a RIME worker and return a typed handle. Each call creates an
+ * independent engine with its own composition and option state; call
+ * `dispose()` when done. Browser-only — throws if called during SSR (the
+ * hooks call it inside an effect for this reason).
+ */
 export async function createRimeEngine(
   options: RimeEngineOptions = {},
 ): Promise<RimeEngine> {
