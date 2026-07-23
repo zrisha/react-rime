@@ -155,6 +155,32 @@ describe('useImeControl syncOptions', () => {
   })
 })
 
+describe('useImeControl generic setOption', () => {
+  it('sets a tracked option by name and mirrors it into state + options bag', async () => {
+    const engine = makeEngine()
+    const { result } = renderHook(() => useImeControl(engine))
+
+    await act(async () => {
+      await result.current.setOption('full_shape', true)
+    })
+    expect(engine.setOption).toHaveBeenCalledWith('full_shape', true)
+    expect(result.current.isFullWidth).toBe(true)
+    expect(result.current.options.full_shape).toBe(true)
+  })
+
+  it('reaches an untracked option without wiring (escape hatch)', async () => {
+    const engine = makeEngine()
+    const { result } = renderHook(() => useImeControl(engine))
+
+    await act(async () => {
+      await result.current.setOption('some_custom_option', true)
+    })
+    expect(engine.setOption).toHaveBeenCalledWith('some_custom_option', true)
+    // Untracked options aren't reflected in the bag.
+    expect(result.current.options.some_custom_option).toBeUndefined()
+  })
+})
+
 describe('useImeControl persistence', () => {
   it('persists toggled options to localStorage', async () => {
     const engine = makeEngine()

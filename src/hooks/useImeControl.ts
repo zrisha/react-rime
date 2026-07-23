@@ -22,20 +22,50 @@ import {
 import type { SchemaId } from '../engine/schema-ids'
 import { devWarn } from '../engine/devWarn'
 
-const ASCII_MODE = 'ascii_mode'
-const FULL_SHAPE = 'full_shape'
-const EXTENDED_CHARSET = 'extended_charset'
-const ASCII_PUNCT = 'ascii_punct'
-const EMOJI_SUGGESTION = 'emoji_suggestion'
+// Single source of truth for the boolean RIME options the library wraps with
+// named convenience accessors. A row here wires the state cell, its
+// persistence, the named toggle, the schema-switch re-sync, engine-pushed
+// syncOptions, and the generic options/setOption surface — nothing else in this
+// file needs touching to add one. `option` is librime's name (and the
+// localStorage key when persisted); `key`/`toggle` are the ImeControl field
+// names. `resetOnSwitch` marks options librime resets to `default` on every
+// schema switch (so we don't re-send them, just mirror the reset locally).
+interface RimeOptionSpec {
+  readonly key: string
+  readonly option: string
+  readonly toggle: string
+  readonly default: boolean
+  readonly persist: boolean
+  readonly resetOnSwitch?: boolean
+}
 
-function useSavedBoolean(key: string, defaultTrue: boolean) {
-  const [val, setVal] = useState<boolean>(() => {
-    if (typeof localStorage === 'undefined') return defaultTrue
-    return defaultTrue ? localStorage.getItem(key) !== 'false' : localStorage.getItem(key) === 'true'
-  })
+const RIME_OPTIONS = [
+  { key: 'isEnglish', option: 'ascii_mode', toggle: 'changeLanguage', default: false, persist: false, resetOnSwitch: true },
+  { key: 'isFullWidth', option: 'full_shape', toggle: 'changeWidth', default: false, persist: true },
+  { key: 'isExtendedCharset', option: 'extended_charset', toggle: 'changeCharset', default: false, persist: true },
+  { key: 'isEnglishPunctuation', option: 'ascii_punct', toggle: 'changePunctuation', default: false, persist: true },
+  { key: 'enableEmoji', option: 'emoji_suggestion', toggle: 'changeEmoji', default: true, persist: true },
+] as const satisfies readonly RimeOptionSpec[]
+
+type OptionKey = (typeof RIME_OPTIONS)[number]['key']
+type ToggleKey = (typeof RIME_OPTIONS)[number]['toggle']
+
+function readSavedBoolean(spec: RimeOptionSpec): boolean {
+  if (!spec.persist || typeof localStorage === 'undefined') return spec.default
+  return spec.default
+    ? localStorage.getItem(spec.option) !== 'false'
+    : localStorage.getItem(spec.option) === 'true'
+}
+
+// One boolean cell per option, persisted to localStorage under the librime
+// option name when `persist` is set (matching my_rime's keys).
+function useOptionState(spec: RimeOptionSpec) {
+  const [val, setVal] = useState<boolean>(() => readSavedBoolean(spec))
   useEffect(() => {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(key, val.toString())
-  }, [key, val])
+    if (spec.persist && typeof localStorage !== 'undefined') {
+      localStorage.setItem(spec.option, val.toString())
+    }
+  }, [spec, val])
   return [val, setVal] as const
 }
 
@@ -112,6 +142,19 @@ export interface ImeControl {
   /** Whether/which candidate comments the active schema hides (`false` | `'emoji'`). */
   hideComment: HideComment
   /**
+   * Current values of the tracked boolean options, keyed by librime option
+   * name (e.g. `ascii_mode`). Pairs with {@link setOption}. Options you set
+   * outside the tracked set are not reflected here.
+   */
+  options: Record<string, boolean>
+  /**
+   * Set any librime boolean option by name, e.g. `setOption('ascii_mode',
+   * true)`. The generic escape hatch behind the named toggles
+   * ({@link changeLanguage} etc.) — use it for options the library doesn't
+   * wrap. Tracked options also update {@link options} and their named field.
+   */
+  setOption: (name: string, value: boolean) => Promise<void>
+  /**
    * Apply option updates pushed by the engine (`updatedOptions` on a
    * {@link RimeResult}; a `!` prefix means the option turned off).
    */
@@ -138,11 +181,25 @@ export function useImeControl(
     ...meta.variantsDefaultIndex,
   }))
 
-  const [isEnglish, setIsEnglish] = useState(false)
-  const [isFullWidth, setIsFullWidth] = useSavedBoolean(FULL_SHAPE, false)
-  const [isExtendedCharset, setIsExtendedCharset] = useSavedBoolean(EXTENDED_CHARSET, false)
-  const [isEnglishPunctuation, setIsEnglishPunctuation] = useSavedBoolean(ASCII_PUNCT, false)
-  const [enableEmoji, setEnableEmoji] = useSavedBoolean(EMOJI_SUGGESTION, true)
+  // One state cell per option, driven off the constant-length RIME_OPTIONS
+  // table. The hook count never varies across renders, so calling useOptionState
+  // in this loop is rules-of-hooks safe.
+  const optionCells = RIME_OPTIONS.map((spec) =>
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useOptionState(spec),
+  )
+
+  // Per-render lookups derived from the cells. `optionValues` is keyed by the
+  // friendly field name (isEnglish…) for the named surface; `cellByName` by the
+  // librime option name (ascii_mode…) for the generic setOption/syncOptions
+  // paths and the `options` bag.
+  const optionValues = {} as Record<OptionKey, boolean>
+  const cellByName: Record<string, { value: boolean; set: (v: boolean) => void; spec: RimeOptionSpec }> = {}
+  RIME_OPTIONS.forEach((spec, i) => {
+    const [value, set] = optionCells[i]
+    optionValues[spec.key] = value
+    cellByName[spec.option] = { value, set, spec }
+  })
 
   const variants: Variant[] = useMemo(() => meta.variants[schemaId] ?? [], [meta, schemaId])
   const variantIndex = useMemo(() => variantIndexMap[schemaId] ?? 0, [variantIndexMap, schemaId])
@@ -158,18 +215,6 @@ export function useImeControl(
     setIme(value ? '' : id)
   }
 
-  const basicOptionMap = useMemo(
-    () => ({
-      [ASCII_MODE]: { value: isEnglish, set: setIsEnglish },
-      [FULL_SHAPE]: { value: isFullWidth, set: setIsFullWidth },
-      [EXTENDED_CHARSET]: { value: isExtendedCharset, set: setIsExtendedCharset },
-      [ASCII_PUNCT]: { value: isEnglishPunctuation, set: setIsEnglishPunctuation },
-      [EMOJI_SUGGESTION]: { value: enableEmoji, set: setEnableEmoji },
-    }),
-    // setters are stable; values are the deps
-    [isEnglish, isFullWidth, isExtendedCharset, isEnglishPunctuation, enableEmoji], // eslint-disable-line react-hooks/exhaustive-deps
-  )
-
   const applyVariant = useCallback(
     async (currentSchemaId: string, currentVariantIndex: number) => {
       if (!engine) return
@@ -184,6 +229,30 @@ export function useImeControl(
     },
     [engine, meta],
   )
+
+  // Generic escape hatch: set any librime boolean option. Tracked options
+  // (in RIME_OPTIONS) also mirror into their state cell. Uses useEventCallback
+  // so the identity is stable and `cellByName` reads the latest render.
+  const setOption = useEventCallback(async (name: string, value: boolean) => {
+    if (!engine) return
+    await engine.setOption(name, value)
+    cellByName[name]?.set(value)
+  })
+
+  // Flip a tracked option, reading its current value at call time.
+  const toggleOption = useEventCallback(async (name: string) => {
+    const cell = cellByName[name]
+    if (!cell) return
+    await setOption(name, !cell.value)
+  })
+
+  // Named toggles are built once (stable identity); each defers to
+  // toggleOption, which reads the latest value when called.
+  const namedToggles = useMemo(() => {
+    const t = {} as Record<ToggleKey, () => Promise<void>>
+    for (const spec of RIME_OPTIONS) t[spec.toggle] = () => toggleOption(spec.option)
+    return t
+  }, [toggleOption])
 
   // Actions use useEventCallback: one identity for the hook's lifetime, always
   // reading the latest render's state.
@@ -203,13 +272,14 @@ export function useImeControl(
       if (!deployed) {
         await applyVariant(targetIME, variantIndexMap[targetIME] ?? 0)
       }
-      // librime resets ascii_mode on schema switch; re-sync the rest.
-      for (const [option, box] of Object.entries(basicOptionMap)) {
-        if (option === ASCII_MODE) {
-          setIsEnglish(false)
+      // librime resets some options (ascii_mode) to their default on schema
+      // switch; mirror those locally and re-send the rest.
+      for (const spec of RIME_OPTIONS as readonly RimeOptionSpec[]) {
+        if (spec.resetOnSwitch) {
+          cellByName[spec.option].set(spec.default)
           continue
         }
-        await engine.setOption(option, box.value)
+        await engine.setOption(spec.option, cellByName[spec.option].value)
       }
     } catch (e) {
       // Rethrow so callers (useRime) can surface it via their error state.
@@ -226,63 +296,49 @@ export function useImeControl(
     await applyVariant(schemaId, next)
   })
 
-  function makeToggle(option: string, value: boolean, set: (v: boolean) => void) {
-    return async () => {
-      if (!engine) return
-      const next = !value
-      await engine.setOption(option, next)
-      set(next)
-    }
-  }
-
-  const changeLanguage = useEventCallback(makeToggle(ASCII_MODE, isEnglish, setIsEnglish))
-  const changeWidth = useEventCallback(makeToggle(FULL_SHAPE, isFullWidth, setIsFullWidth))
-  const changeCharset = useEventCallback(
-    makeToggle(EXTENDED_CHARSET, isExtendedCharset, setIsExtendedCharset),
-  )
-  const changePunctuation = useEventCallback(
-    makeToggle(ASCII_PUNCT, isEnglishPunctuation, setIsEnglishPunctuation),
-  )
-  const changeEmoji = useEventCallback(makeToggle(EMOJI_SUGGESTION, enableEmoji, setEnableEmoji))
-
-  const syncOptions = useEventCallback(
-    (updatedOptions: string[]) => {
-      if (updatedOptions.length === 1) {
-        const updatedOption = updatedOptions[0]
-        for (const [option, box] of Object.entries(basicOptionMap)) {
-          if (option === updatedOption) {
-            box.set(true)
+  const syncOptions = useEventCallback((updatedOptions: string[]) => {
+    if (updatedOptions.length === 1) {
+      const updated = updatedOptions[0]
+      if (cellByName[updated]) {
+        cellByName[updated].set(true)
+        return
+      }
+      if (updated.startsWith('!') && cellByName[updated.slice(1)]) {
+        cellByName[updated.slice(1)].set(false)
+        return
+      }
+      if (!deployed && variants.length === 2) {
+        for (const [i, v] of variants.entries()) {
+          if ((v.id === updated && v.value) || (`!${v.id}` === updated && !v.value)) {
+            setVariantIndexMap((m) => ({ ...m, [schemaId]: i }))
             return
-          }
-          if (`!${option}` === updatedOption) {
-            box.set(false)
-            return
-          }
-        }
-        if (!deployed && variants.length === 2) {
-          for (const [i, v] of variants.entries()) {
-            if ((v.id === updatedOption && v.value) || (`!${v.id}` === updatedOption && !v.value)) {
-              setVariantIndexMap((m) => ({ ...m, [schemaId]: i }))
-              return
-            }
-          }
-        }
-      } else {
-        for (const updatedOption of updatedOptions) {
-          if (updatedOption.startsWith('!')) continue
-          for (const [i, v] of variants.entries()) {
-            if (v.id === updatedOption) {
-              setVariantIndexMap((m) => ({ ...m, [schemaId]: i }))
-              return
-            }
           }
         }
       }
-    },
-  )
+    } else {
+      for (const updatedOption of updatedOptions) {
+        if (updatedOption.startsWith('!')) continue
+        for (const [i, v] of variants.entries()) {
+          if (v.id === updatedOption) {
+            setVariantIndexMap((m) => ({ ...m, [schemaId]: i }))
+            return
+          }
+        }
+      }
+    }
+  })
+
+  // Generic view of the tracked options, keyed by librime option name.
+  const optionsBag: Record<string, boolean> = {}
+  for (const spec of RIME_OPTIONS) optionsBag[spec.option] = cellByName[spec.option].value
+
+  // One primitive dep for the memo below that changes iff any option value
+  // changes (a spread of the cell values isn't allowed in a deps array).
+  const optionsSignature = optionCells.map((c) => (c[0] ? '1' : '0')).join('')
 
   // Memoized so the object identity only changes when state does (all actions
-  // are identity-stable).
+  // are identity-stable). The named option values are spread from the table so
+  // adding a RIME_OPTIONS row needs no edit here.
   return useMemo(
     () => ({
       // state
@@ -297,23 +353,19 @@ export function useImeControl(
       variant,
       variantIndex,
       hideComment,
-      isEnglish,
-      isFullWidth,
-      isExtendedCharset,
-      isEnglishPunctuation,
-      enableEmoji,
+      ...optionValues,
+      options: optionsBag,
       // actions
       selectIME,
       setSchema: selectIME,
+      setOption,
       syncOptions,
       changeVariant,
-      changeLanguage,
-      changeWidth,
-      changeCharset,
-      changePunctuation,
-      changeEmoji,
+      ...namedToggles,
     }),
-    // actions are identity-stable; only state belongs in the deps
+    // actions are identity-stable; only state belongs in the deps. optionValues
+    // /optionsBag/namedToggles are derived from the option cells, tracked here
+    // via optionsSignature (their real dep).
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       schemaId,
@@ -326,11 +378,7 @@ export function useImeControl(
       variant,
       variantIndex,
       hideComment,
-      isEnglish,
-      isFullWidth,
-      isExtendedCharset,
-      isEnglishPunctuation,
-      enableEmoji,
+      optionsSignature,
     ],
   )
 }

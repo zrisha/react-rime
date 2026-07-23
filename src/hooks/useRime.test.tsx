@@ -6,13 +6,15 @@ const h = vi.hoisted(() => ({
   deployHandler: null as null | ((status: string, schemas: string[]) => void),
   processImpl: (_key: string): any => ({ state: 3 }),
   selectImpl: (_i: number): string => JSON.stringify({ state: 0, committed: '' }),
+  setPageSize: vi.fn(async () => {}),
+  setOption: vi.fn(async () => {}),
 }))
 
 vi.mock('../engine/engine', () => {
   const engine = {
     setIME: vi.fn(async () => {}),
-    setOption: vi.fn(async () => {}),
-    setPageSize: vi.fn(async () => {}),
+    setOption: h.setOption,
+    setPageSize: h.setPageSize,
     deploy: vi.fn(async () => {}),
     process: vi.fn(async (k: string) => h.processImpl(k)),
     selectCandidateOnCurrentPage: vi.fn(async (i: number) => h.selectImpl(i)),
@@ -50,6 +52,8 @@ describe('useRime composition', () => {
     h.deployHandler = null
     h.processImpl = () => ({ state: 3 })
     h.selectImpl = () => JSON.stringify({ state: 0, committed: '' })
+    h.setPageSize.mockClear()
+    h.setOption.mockClear()
   })
 
   it('becomes ready on deploy success', async () => {
@@ -57,6 +61,67 @@ describe('useRime composition', () => {
     await waitFor(() => expect(h.deployHandler).not.toBeNull())
     act(() => h.deployHandler!('success', []))
     await waitFor(() => expect(result.current.ready).toBe(true))
+  })
+
+  it('re-exposes ime/showVariant/options from ImeControl (no silent drop)', async () => {
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(h.deployHandler).not.toBeNull())
+    act(() => h.deployHandler!('success', []))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    expect(result.current.ime).toBe(result.current.schema)
+    expect(result.current.showVariant).toBe(true)
+    expect(typeof result.current.options).toBe('object')
+    expect(typeof result.current.setOption).toBe('function')
+  })
+
+  it('forwards setOption to the engine (generic escape hatch)', async () => {
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(h.deployHandler).not.toBeNull())
+    act(() => h.deployHandler!('success', []))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    h.setOption.mockClear()
+
+    await act(async () => {
+      await result.current.setOption('ascii_mode', true)
+    })
+    expect(h.setOption).toHaveBeenCalledWith('ascii_mode', true)
+    expect(result.current.isEnglish).toBe(true)
+    expect(result.current.options.ascii_mode).toBe(true)
+  })
+
+  it('applies pageSize once the engine is created', async () => {
+    const { result } = renderHook(() => useRime({ pageSize: 9 }))
+    await waitFor(() => expect(h.deployHandler).not.toBeNull())
+    act(() => h.deployHandler!('success', []))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    expect(h.setPageSize).toHaveBeenCalledTimes(1)
+    expect(h.setPageSize).toHaveBeenCalledWith(9)
+  })
+
+  it('re-applies pageSize when it changes', async () => {
+    const { result, rerender } = renderHook(({ pageSize }) => useRime({ pageSize }), {
+      initialProps: { pageSize: 9 },
+    })
+    await waitFor(() => expect(h.deployHandler).not.toBeNull())
+    act(() => h.deployHandler!('success', []))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(h.setPageSize).toHaveBeenCalledTimes(1)
+
+    rerender({ pageSize: 5 })
+
+    await waitFor(() => expect(h.setPageSize).toHaveBeenCalledTimes(2))
+    expect(h.setPageSize).toHaveBeenLastCalledWith(5)
+  })
+
+  it('does not call setPageSize when the option is omitted', async () => {
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(h.deployHandler).not.toBeNull())
+    act(() => h.deployHandler!('success', []))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    expect(h.setPageSize).not.toHaveBeenCalled()
   })
 
   it('enters composition and exposes candidates (ACCEPTED)', async () => {

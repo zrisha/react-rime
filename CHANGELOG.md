@@ -28,6 +28,19 @@ tracking the repo:
 - **New API** — `getInputProps()`, `cancelComposition()`,
   `commitHighlighted()`, `commitRaw()`, `highlightNext()`, `highlightPrev()`,
   `SCHEMA_IDS` / `SchemaId`.
+- **`useRime({ pageSize })`** — sets candidates-per-page, kept in sync with
+  `RimeEngine.setPageSize` on change, instead of requiring a custom
+  `createRimeEngine` integration to reach it.
+- **Generic option escape hatch** — `rime.setOption(name, value)` and
+  `rime.options` (tracked values, keyed by librime option name) on both
+  `useRime` and `useImeControl`. Any librime boolean option is now reachable
+  without a new named wrapper; the five named toggles stay as convenience.
+  Internally the wrapped options are driven from one `RIME_OPTIONS` table, so
+  adding one is a single row.
+- **`ime` and `showVariant` now surface on `useRime`** — previously only on
+  `useImeControl`, silently dropped in the re-export (same class of gap as
+  `pageSize`). The re-export is now a spread, so `ImeControl` fields can't fall
+  through it again.
 - **Self-hosting clarification** — `react-rime/worker.js` can be self-hosted,
   but it still streams engine binaries and dictionaries from jsdelivr;
   air-gapped deployment is not yet supported.

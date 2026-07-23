@@ -119,6 +119,52 @@ suggestions. The exact rule: show `candidate.comment` when
 `hideComment === false`, or when `hideComment === 'emoji'` and the candidate
 text is not itself an emoji (`!/\p{Emoji}/u.test(candidate.text)`).
 
+## Setting an arbitrary RIME option
+
+The named toggles (`changeLanguage`, `changeWidth`, `changeCharset`,
+`changePunctuation`, `changeEmoji`) cover the common options. For anything else
+librime supports, use the generic escape hatch — no wrapper needed:
+
+```tsx
+const rime = useRime()
+
+// Set any boolean option by its librime name:
+rime.setOption('ascii_mode', true)
+
+// Read the tracked options (keyed by librime option name):
+const englishOn = rime.options.ascii_mode
+```
+
+`options` reflects the library's tracked options; an option you set that the
+library doesn't wrap still reaches the engine, it just won't appear in the bag.
+For candidates-per-page use the dedicated `useRime({ pageSize })` (it's a
+separate engine RPC, not a boolean option).
+
+## App-level settings the library leaves to you
+
+my-rime's PWA had a few appearance settings that are pure consumer UI, not
+engine state — react-rime deliberately doesn't own them. Each is a few lines:
+
+**Vertical candidate layout** — the candidate list is your own markup (see the
+headless recipe above); lay it out however you like:
+
+```css
+.candidates { display: flex; flex-direction: column; }
+```
+
+**Copy each commit to the clipboard** — use the `onCommit` handler:
+
+```tsx
+const rime = useRime({ onCommit: (committed) => navigator.clipboard.writeText(committed) })
+```
+
+**Candidate / preedit font** — plain CSS on your own elements; nothing to wire
+through the hook:
+
+```css
+.preedit, .candidates { font-family: 'Noto Sans CJK SC', sans-serif; }
+```
+
 ## Content-Security-Policy
 
 With the default (zero-config, CDN-streaming) setup the page needs:

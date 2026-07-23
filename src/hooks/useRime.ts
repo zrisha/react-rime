@@ -26,6 +26,8 @@ export interface UseRimeOptions extends RimeEngineOptions, UseImeControlOptions 
   defaultText?: string
   /** Called whenever text is committed by the engine. */
   onCommit?: (committed: string) => void
+  /** Candidates per page (RIME's default is 5). Re-applied whenever this value changes. */
+  pageSize?: number
 }
 
 /** Consumer handlers merged into {@link UseRime.getInputProps}'s result. */
@@ -145,6 +147,26 @@ export interface UseRime {
   changeEmoji: () => Promise<void>
   /** Whether/which candidate comments the active schema hides (`false` | `'emoji'`). */
   hideComment: ImeControl['hideComment']
+  /**
+   * Id of the fully configured schema: empty while a switch is in flight,
+   * equal to {@link schema} once its options re-sync. {@link loading} is the
+   * simple busy flag; this tells you exactly which schema has settled.
+   */
+  ime: string
+  /** `false` while switching schema — hide variant UI until the switch settles. */
+  showVariant: boolean
+  /**
+   * Current values of the tracked boolean options, keyed by librime option
+   * name (e.g. `ascii_mode`). Pairs with {@link setOption}.
+   */
+  options: Record<string, boolean>
+  /**
+   * Set any librime boolean option by name, e.g. `setOption('ascii_mode',
+   * true)` — the escape hatch behind the named toggles ({@link changeLanguage}
+   * etc.), for options this hook doesn't wrap. Tracked options also update
+   * {@link options} and their named field.
+   */
+  setOption: (name: string, value: boolean) => Promise<void>
 }
 
 /**
@@ -160,7 +182,7 @@ export interface UseRime {
  * ```
  */
 export function useRime(options: UseRimeOptions = {}): UseRime {
-  const { workerUrl, schema, defaultText, onCommit } = options
+  const { workerUrl, schema, defaultText, onCommit, pageSize } = options
 
   const [engine, setEngine] = useState<RimeEngine | null>(null)
   const [ready, setReady] = useState(false)
@@ -233,6 +255,11 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
     }
     // control.setDeployed is a stable state setter
   }, [workerUrl]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- keep candidates-per-page in sync with the pageSize option ---
+  useEffect(() => {
+    if (engine && pageSize !== undefined) void engine.setPageSize(pageSize)
+  }, [engine, pageSize])
 
   // --- deploy the initial schema once the engine exists ---
   useEffect(() => {
@@ -444,49 +471,51 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
   // Memoized so the object identity (e.g. as a context value in RimeProvider)
   // only changes when state does; every function above is identity-stable.
   return useMemo(
-    () => ({
-      ready,
-      loading: control.loading,
-      error,
-      text,
-      setText,
-      composing,
-      preedit,
-      candidates,
-      highlighted,
-      selectLabels,
-      page,
-      isLastPage,
-      getInputProps,
-      inputRef,
-      onKeyDown,
-      onKeyUp,
-      selectCandidate,
-      changePage,
-      cancelComposition,
-      commitHighlighted,
-      commitRaw,
-      highlightNext,
-      highlightPrev,
-      schema: control.schemaId,
-      setSchema,
-      schemas: control.schemas,
-      variants: control.variants,
-      variant: control.variant,
-      changeVariant: control.changeVariant,
-      isEnglish: control.isEnglish,
-      changeLanguage: control.changeLanguage,
-      isFullWidth: control.isFullWidth,
-      changeWidth: control.changeWidth,
-      isEnglishPunctuation: control.isEnglishPunctuation,
-      changePunctuation: control.changePunctuation,
-      isExtendedCharset: control.isExtendedCharset,
-      changeCharset: control.changeCharset,
-      enableEmoji: control.enableEmoji,
-      changeEmoji: control.changeEmoji,
-      hideComment: control.hideComment,
-    }),
-    // functions are identity-stable except getInputProps (tracks text)
+    () => {
+      // Re-expose the whole ImeControl surface except the plumbing useRime owns
+      // or renames. Spreading (instead of hand-copying each field) is what keeps
+      // ime/showVariant/options/setOption from being silently dropped here.
+      const {
+        schemaId,
+        selectIME: _selectIME,
+        setSchema: _setSchema,
+        deployed: _deployed,
+        setDeployed: _setDeployed,
+        variantIndex: _variantIndex,
+        syncOptions: _syncOptions,
+        ...publicControl
+      } = control
+      return {
+        ...publicControl,
+        schema: schemaId,
+        setSchema,
+        // lifecycle / committed-text buffer / composition owned by useRime
+        ready,
+        error,
+        text,
+        setText,
+        composing,
+        preedit,
+        candidates,
+        highlighted,
+        selectLabels,
+        page,
+        isLastPage,
+        getInputProps,
+        inputRef,
+        onKeyDown,
+        onKeyUp,
+        selectCandidate,
+        changePage,
+        cancelComposition,
+        commitHighlighted,
+        commitRaw,
+        highlightNext,
+        highlightPrev,
+      }
+    },
+    // functions are identity-stable except getInputProps (tracks text); control
+    // is memoized on its own state, so its identity is the option/schema dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       ready,
