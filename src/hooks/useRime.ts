@@ -120,6 +120,12 @@ export interface UseRime {
   schema: string
   /** Switch to a different schema by id (autocompletes the bundled ids). */
   setSchema: (id: SchemaId | (string & {})) => Promise<void>
+  /**
+   * Delete every user dictionary librime has learned — wire this to a "forget
+   * what I typed" control. Independent of the `userDict` option: useful even
+   * with learning left on.
+   */
+  clearLearned: () => Promise<void>
   /** Grouped options for building a schema `<select>`. */
   schemas: ImeControl['schemas']
   /** Script variants available for the active schema (e.g. 简/繁). */
@@ -215,13 +221,13 @@ export type AssertNoLeakedControlFields = MustBeNever<
  * ```
  */
 export function useRime(options: UseRimeOptions = {}): UseRime {
-  const { workerUrl, schema, defaultText, onCommit, pageSize } = options
+  const { workerUrl, schema, userDict, defaultText, onCommit, pageSize } = options
 
   const [engine, setEngine] = useState<RimeEngine | null>(null)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
-  const control = useImeControl(engine, { schema })
+  const control = useImeControl(engine, { schema, userDict })
 
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null)
   const [text, setTextState] = useState(defaultText ?? '')
@@ -527,6 +533,18 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
     }
   })
 
+  const clearLearned = useEventCallback(async () => {
+    // Same reasoning as setSchema: clearing re-selects the schema, which resets
+    // the librime session and kills any in-flight composition — so drop the
+    // preedit up front instead of leaving a dead panel on screen.
+    clearComposition()
+    try {
+      await control.clearLearned()
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)))
+    }
+  })
+
   // Memoized so the object identity (e.g. as a context value in RimeProvider)
   // only changes when state does; every function above is identity-stable.
   return useMemo(
@@ -542,12 +560,14 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
         setDeployed: _setDeployed,
         variantIndex: _variantIndex,
         syncOptions: _syncOptions,
+        clearLearned: _clearLearned,
         ...publicControl
       } = control
       return {
         ...publicControl,
         schema: schemaId,
         setSchema,
+        clearLearned,
         // lifecycle / committed-text buffer / composition owned by useRime
         ready,
         error,

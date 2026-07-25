@@ -84,6 +84,7 @@ Exactly one input under the provider should spread `getInputProps()`.
 | `defaultText` | string   | `''`           | Initial committed-text buffer.               |
 | `onCommit`    | function | —              | Called with each committed string.           |
 | `pageSize`    | number   | schema's own   | Candidates per page; re-applied when it changes, and setting it back to `undefined` restores the schema default (usually 5). |
+| `userDict`    | boolean  | `true`         | Whether librime learns from what the user types. `false` turns learning off and deletes anything already learned — see [Learning](#learning-from-what-the-user-types). |
 
 ### Returned state & actions (selected)
 
@@ -112,6 +113,7 @@ Exactly one input under the provider should spread `getInputProps()`.
 | `variant` / `changeVariant()` | Script variant (e.g. 简/繁) and cycler.           |
 | `setOption(name, value)`  | Set any librime boolean option by name — the escape hatch behind the named toggles. |
 | `options`                 | Tracked option values, keyed by librime option name (e.g. `ascii_mode`). |
+| `clearLearned()`          | Delete everything librime has learned from this user's typing. |
 
 For caret-positioned panels, Next.js/SSR, fully custom candidate UIs, and
 CSP requirements, see [docs/RECIPES.md](docs/RECIPES.md).
@@ -158,6 +160,47 @@ keyboard.
 - Option toggles (full-width, punctuation, emoji, extended charset) persist
   to `localStorage` under the same keys the official my-rime PWA uses, so an
   embedded my-rime and your app share settings on the same origin.
+
+## Learning from what the user types
+
+By default librime **learns**: every commit is recorded in a per-schema user
+dictionary, which re-ranks later candidates and creates new entries for phrases
+the user composed — whole sentences included. It lives in IndexedDB under your
+origin and survives reloads. This is librime's own behavior, not something
+`react-rime` adds, and for most input methods it's what users expect.
+
+If you'd rather nothing were retained — a shared kiosk, a privacy-sensitive
+form, or just predictable candidates — turn it off:
+
+```tsx
+const rime = useRime({ userDict: false })
+```
+
+Candidates then come only from the schema's shipped dictionary. Switching it
+off also deletes any user dictionary already on disk, so it un-learns whatever
+an earlier session recorded. It's applied per schema as each one is activated,
+so it holds across schema switches.
+
+It's read when each schema is activated, not watched: flipping it to `false` at
+runtime takes effect on the next schema switch, and flipping it back to `true`
+only takes effect after a reload (the rewritten schema stays in memory for the
+rest of the session). Set it once alongside `schema` and it behaves as you'd
+expect.
+
+To keep learning on but give users a way out, wire up the action instead:
+
+```tsx
+<button onClick={rime.clearLearned}>Forget what I've typed</button>
+```
+
+Both leave author-supplied phrase tables (`custom_phrase`) and any schema files
+you deployed yourself untouched — unlike `resetUserDirectory()` on the engine
+handle, which wipes the whole user directory.
+
+> Self-deployed schemas (written via `FS` + `deploy()`) have no prebuilt schema
+> for `react-rime` to rewrite, so `userDict: false` can't reach them; set
+> `translator/enable_user_dict: false` in your own source YAML. A dev-mode
+> warning tells you when this happens rather than leaving learning quietly on.
 
 ## Assets & offline use
 

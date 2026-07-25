@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type SetStateAction,
@@ -21,6 +22,7 @@ import {
 } from '../engine/schema-metadata'
 import type { SchemaId } from '../engine/schema-ids'
 import { devWarn } from '../engine/devWarn'
+import { clearUserDbs, enforceUserDictDisabled } from '../engine/user-dict'
 
 // Single source of truth for the boolean RIME options the library wraps with
 // named convenience accessors. A row here wires the state cell, its
@@ -76,6 +78,18 @@ export interface UseImeControlOptions {
    * Defaults to the first schema (luna_pinyin).
    */
   schema?: SchemaId | (string & {})
+  /**
+   * Whether librime may learn from what the user types. Defaults to `true`,
+   * librime's own behavior: every commit is recorded in a per-schema user
+   * dictionary (whole phrases and sentences included), which re-ranks later
+   * candidates and persists to IndexedDB across reloads.
+   *
+   * Set `false` to turn learning off — candidates then come only from the
+   * schema's shipped dictionary. Any user dictionary already on disk is
+   * deleted, so this also un-learns whatever was recorded before. Applied per
+   * schema on activation, so it survives schema switches.
+   */
+  userDict?: boolean
 }
 
 /** Everything {@link useImeControl} returns. {@link useRime} re-exposes most of it. */
@@ -96,6 +110,12 @@ export interface ImeControl {
   selectIME: (id: SchemaId | (string & {})) => Promise<void>
   /** Alias of {@link selectIME} (the name {@link useRime} exposes). */
   setSchema: (id: SchemaId | (string & {})) => Promise<void>
+  /**
+   * Delete every user dictionary librime has built up — the "forget what I
+   * typed" action. Leaves consumer-deployed schema files alone. Re-selects the
+   * active schema, so it settles like a schema switch.
+   */
+  clearLearned: () => Promise<void>
 
   // --- deploy (custom schemas) ---
   /**
@@ -180,6 +200,9 @@ export function useImeControl(
   const [variantIndexMap, setVariantIndexMap] = useState<Record<string, number>>(() => ({
     ...meta.variantsDefaultIndex,
   }))
+  // Which engine has had its pre-existing user dictionaries swept, so the
+  // one-time clear re-runs if the engine is replaced (e.g. workerUrl change).
+  const userDictClearedFor = useRef<RimeEngine | null>(null)
 
   // One state cell per option, driven off the constant-length RIME_OPTIONS
   // table. The hook count never varies across renders, so calling useOptionState
@@ -272,6 +295,13 @@ export function useImeControl(
     setLoading(true, targetIME)
     try {
       await engine.setIME(targetIME)
+      if (options.userDict === false) {
+        // The sweep of already-learned dictionaries has to happen once per
+        // engine even when this schema needed no rewrite — it is the only thing
+        // that reaches what *other* schemas learned in an earlier session.
+        await enforceUserDictDisabled(engine, targetIME, userDictClearedFor.current !== engine)
+        userDictClearedFor.current = engine
+      }
       setSchemaId(targetIME)
       if (!deployed) {
         await applyVariant(targetIME, variantIndexMap[targetIME] ?? 0)
@@ -291,6 +321,24 @@ export function useImeControl(
       throw e instanceof Error ? e : new Error(String(e))
     }
     setLoading(false, targetIME)
+  })
+
+  const clearLearned = useEventCallback(async () => {
+    if (!engine) return
+    // Gate input *before* touching the filesystem: a commit landing mid-sweep
+    // would trigger the worker's syncfs and flush a half-deleted database to
+    // IndexedDB. The deletion is many worker round-trips, so the window is real.
+    setLoading(true, schemaId)
+    try {
+      await clearUserDbs(engine)
+    } catch (e) {
+      setLoadingState(false)
+      throw e instanceof Error ? e : new Error(String(e))
+    }
+    // Re-select so librime reopens the (now absent) databases instead of
+    // writing its in-memory copy back out, and so the worker's syncfs at the
+    // end of setIME persists the deletion.
+    await selectIME(schemaId)
   })
 
   const changeVariant = useEventCallback(async () => {
@@ -363,6 +411,7 @@ export function useImeControl(
       // actions
       selectIME,
       setSchema: selectIME,
+      clearLearned,
       setOption,
       syncOptions,
       changeVariant,

@@ -48,6 +48,25 @@ tracking the repo:
   librime session, so a preedit started under the old schema was already dead
   in the engine but stayed on screen, showing candidates that did nothing,
   until some later interaction (e.g. paging) happened to clear it.
+- **`useRime({ userDict: false })` and `rime.clearLearned()`** — librime learns
+  from every commit into a per-schema `*.userdb`, persisted to IndexedDB, which
+  re-ranks later candidates and stores whole composed sentences. There was no
+  way to turn that off or clear it: it's schema *config* (`enable_user_dict`),
+  not a runtime switch, so `setOption` can't reach it, and a `*.custom.yaml`
+  patch is inert here because my_rime ships **compiled** schemas straight into
+  the build directory and skips librime's build step. What does work: the file
+  librime reads at activation is the plain YAML in that directory, so the
+  library rewrites it through the worker's FS and re-selects the schema
+  (`set_ime` recreates the session and re-reads the config — no deploy, no
+  wasm rebuild). Applied per schema on activation, so it survives schema
+  switches. Every dict-backed translator namespace is disabled, not just
+  `translator`: reverse-lookup namespaces open their own user dictionaries
+  (jyut6ping3 has four, array30 three). Namespaces on a read-only `db_class`
+  (`custom_phrase`) are deliberately left alone — those are author-supplied
+  phrase lists, not learned text. `clearLearned()` deletes the databases while
+  leaving consumer-deployed files intact, unlike `resetUserDirectory()`.
+  Verified against real librime for luna_pinyin, jyut6ping3, array30, wubi86
+  and cangjie5.
 - **Self-hosting clarification** — `react-rime/worker.js` can be self-hosted,
   but it still streams engine binaries and dictionaries from jsdelivr;
   air-gapped deployment is not yet supported.

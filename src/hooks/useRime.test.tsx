@@ -428,3 +428,57 @@ describe('useRime composition', () => {
     expect(result.current.isEnglish).toBe(true)
   })
 })
+
+describe('useRime clearLearned', () => {
+  beforeEach(() => {
+    h.processImpl = () => ({ state: 3 })
+  })
+
+  it('drops the composition, like any other schema re-selection', async () => {
+    // clearLearned re-selects the schema, which resets the librime session and
+    // kills the composition in the engine — leaving the preedit on screen would
+    // show candidates that no longer do anything.
+    h.processImpl = (key) =>
+      key === 'n'
+        ? {
+            state: 1,
+            head: '',
+            body: 'n',
+            tail: '',
+            page: 0,
+            isLastPage: true,
+            highlighted: 0,
+            candidates: [{ text: '你' }],
+          }
+        : { state: 3 }
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    await act(async () => {
+      result.current.onKeyDown(kbd('n', 'KeyN'))
+    })
+    expect(result.current.composing).toBe(true)
+
+    await act(async () => {
+      await result.current.clearLearned()
+    })
+    expect(result.current.composing).toBe(false)
+    expect(result.current.candidates).toEqual([])
+  })
+
+  it('surfaces failures through rime.error rather than rejecting', async () => {
+    // The documented usage is <button onClick={rime.clearLearned}>, which has
+    // nowhere to catch a rejection — an unhandled one would be the only signal.
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    const { createRimeEngine } = await import('../engine/engine')
+    const engine = await createRimeEngine()
+    vi.mocked(engine.setIME).mockRejectedValueOnce(new Error('disk gone'))
+
+    await act(async () => {
+      await expect(result.current.clearLearned()).resolves.toBeUndefined()
+    })
+    expect(result.current.error?.message).toBe('disk gone')
+  })
+})
