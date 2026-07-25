@@ -193,12 +193,16 @@ export function useImeControl(
   // friendly field name (isEnglish…) for the named surface; `cellByName` by the
   // librime option name (ascii_mode…) for the generic setOption/syncOptions
   // paths and the `options` bag.
+  // Null-prototype: `setOption`/`syncOptions` take arbitrary option names, and a
+  // plain `{}` would resolve inherited keys ('constructor', 'toString', …) to
+  // truthy non-cells and throw on `.set`.
   const optionValues = {} as Record<OptionKey, boolean>
-  const cellByName: Record<string, { value: boolean; set: (v: boolean) => void; spec: RimeOptionSpec }> = {}
+  const cellByName: Record<string, { value: boolean; set: (v: boolean) => void }> =
+    Object.create(null)
   RIME_OPTIONS.forEach((spec, i) => {
     const [value, set] = optionCells[i]
     optionValues[spec.key] = value
-    cellByName[spec.option] = { value, set, spec }
+    cellByName[spec.option] = { value, set }
   })
 
   const variants: Variant[] = useMemo(() => meta.variants[schemaId] ?? [], [meta, schemaId])
@@ -329,7 +333,8 @@ export function useImeControl(
   })
 
   // Generic view of the tracked options, keyed by librime option name.
-  const optionsBag: Record<string, boolean> = {}
+  // Null-prototype so a miss reads as `undefined`, not an inherited Object member.
+  const optionsBag: Record<string, boolean> = Object.create(null)
   for (const spec of RIME_OPTIONS) optionsBag[spec.option] = cellByName[spec.option].value
 
   // One primitive dep for the memo below that changes iff any option value

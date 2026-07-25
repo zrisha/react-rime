@@ -1,10 +1,13 @@
+import { useState } from 'react'
 import { useRime } from 'react-rime'
 import './app.css'
 
 export function App() {
+  const [pageSize, setPageSize] = useState(9)
+
   // The whole library surface is this one hook; every element below is plain
   // JSX wired to it — the recommended (headless) integration.
-  const rime = useRime()
+  const rime = useRime({ pageSize })
 
   return (
     <main className="app">
@@ -33,6 +36,20 @@ export function App() {
                 </option>
               ),
             )}
+          </select>
+        </label>
+        <label>
+          Page size:&nbsp;
+          <select
+            value={pageSize}
+            data-testid="page-size"
+            onChange={(e) => setPageSize(Number(e.target.value))}
+          >
+            {[3, 5, 7, 9].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
           </select>
         </label>
         <span className="status" data-testid="status">
@@ -102,6 +119,13 @@ export function App() {
           </div>
         )}
       </div>
+
+      {/* Candidates the engine actually returned for this page — compare with
+          the Page size select to see whether the setting is taking effect. */}
+      <p className="status" data-testid="page-report">
+        page size: {pageSize} · candidates on this page:{' '}
+        {rime.composing ? rime.candidates.length : '—'}
+      </p>
 
       <pre className="buffer" data-testid="buffer">
         {rime.text}

@@ -257,8 +257,16 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
   }, [workerUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- keep candidates-per-page in sync with the pageSize option ---
+  // Unlike the boolean options (which librime resets on schema switch, hence
+  // the re-sync in useImeControl.selectIME), page size survives `set_ime` —
+  // verified against the real engine — so schemaId is deliberately not a dep.
+  // A change mid-composition lands on the next keystroke, not retroactively.
   useEffect(() => {
-    if (engine && pageSize !== undefined) void engine.setPageSize(pageSize)
+    if (engine && pageSize !== undefined) {
+      engine
+        .setPageSize(pageSize)
+        .catch((err) => setError(err instanceof Error ? err : new Error(String(err))))
+    }
   }, [engine, pageSize])
 
   // --- deploy the initial schema once the engine exists ---

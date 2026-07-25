@@ -179,6 +179,24 @@ describe('useImeControl generic setOption', () => {
     // Untracked options aren't reflected in the bag.
     expect(result.current.options.some_custom_option).toBeUndefined()
   })
+
+  // The option-name lookups take arbitrary strings (consumer-supplied for
+  // setOption, engine-supplied for syncOptions), so they must not resolve
+  // Object.prototype members to something that looks like a tracked cell.
+  it('treats Object.prototype keys as untracked option names', async () => {
+    const engine = makeEngine()
+    const { result } = renderHook(() => useImeControl(engine))
+
+    await act(async () => {
+      await result.current.setOption('constructor', true)
+    })
+    expect(engine.setOption).toHaveBeenCalledWith('constructor', true)
+    expect(result.current.options.constructor).toBeUndefined()
+
+    act(() => result.current.syncOptions(['toString']))
+    act(() => result.current.syncOptions(['!hasOwnProperty']))
+    expect(result.current.options.toString).toBeUndefined()
+  })
 })
 
 describe('useImeControl persistence', () => {

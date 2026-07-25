@@ -83,6 +83,7 @@ Exactly one input under the provider should spread `getInputProps()`.
 | `workerUrl`   | string   | jsdelivr CDN   | Override the worker script (see Assets).     |
 | `defaultText` | string   | `''`           | Initial committed-text buffer.               |
 | `onCommit`    | function | —              | Called with each committed string.           |
+| `pageSize`    | number   | `5` (RIME's)   | Candidates per page; re-applied when it changes. |
 
 ### Returned state & actions (selected)
 
@@ -109,6 +110,8 @@ Exactly one input under the provider should spread `getInputProps()`.
 | `schemas`                 | Grouped options for a schema `<select>`.              |
 | `changeLanguage()`        | Toggle ASCII (English) mode.                          |
 | `variant` / `changeVariant()` | Script variant (e.g. 简/繁) and cycler.           |
+| `setOption(name, value)`  | Set any librime boolean option by name — the escape hatch behind the named toggles. |
+| `options`                 | Tracked option values, keyed by librime option name (e.g. `ascii_mode`). |
 
 For caret-positioned panels, Next.js/SSR, fully custom candidate UIs, and
 CSP requirements, see [docs/RECIPES.md](docs/RECIPES.md).
