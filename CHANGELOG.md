@@ -30,7 +30,10 @@ tracking the repo:
   `SCHEMA_IDS` / `SchemaId`.
 - **`useRime({ pageSize })`** — sets candidates-per-page, kept in sync with
   `RimeEngine.setPageSize` on change, instead of requiring a custom
-  `createRimeEngine` integration to reach it.
+  `createRimeEngine` integration to reach it. Setting it back to `undefined`
+  restores the schema's own default: the engine treats page size 0 as "unset"
+  (my_rime's librime patch falls back to the schema's `menu/page_size`), so
+  the library never hardcodes librime's 5.
 - **Generic option escape hatch** — `rime.setOption(name, value)` and
   `rime.options` (tracked values, keyed by librime option name) on both
   `useRime` and `useImeControl`. Any librime boolean option is now reachable

@@ -83,7 +83,7 @@ Exactly one input under the provider should spread `getInputProps()`.
 | `workerUrl`   | string   | jsdelivr CDN   | Override the worker script (see Assets).     |
 | `defaultText` | string   | `''`           | Initial committed-text buffer.               |
 | `onCommit`    | function | —              | Called with each committed string.           |
-| `pageSize`    | number   | `5` (RIME's)   | Candidates per page; re-applied when it changes. |
+| `pageSize`    | number   | schema's own   | Candidates per page; re-applied when it changes, and setting it back to `undefined` restores the schema default (usually 5). |
 
 ### Returned state & actions (selected)
 

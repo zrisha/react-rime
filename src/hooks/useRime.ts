@@ -26,7 +26,10 @@ export interface UseRimeOptions extends RimeEngineOptions, UseImeControlOptions 
   defaultText?: string
   /** Called whenever text is committed by the engine. */
   onCommit?: (committed: string) => void
-  /** Candidates per page (RIME's default is 5). Re-applied whenever this value changes. */
+  /**
+   * Candidates per page. Re-applied whenever this value changes; set it back
+   * to `undefined` to restore the schema's own default (usually 5).
+   */
   pageSize?: number
 }
 
@@ -291,12 +294,24 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
   // the re-sync in useImeControl.selectIME), page size survives `set_ime` —
   // verified against the real engine — so schemaId is deliberately not a dep.
   // A change mid-composition lands on the next keystroke, not retroactively.
+  // `setPageSize(0)` means "use the schema's own menu/page_size" (my_rime's
+  // librime patch treats 0 as unset), so dropping the option restores the
+  // schema default without us hardcoding librime's 5. The ref remembers which
+  // engine a custom size was applied to, so a fresh engine (already at the
+  // default) is never sent a spurious reset.
+  const pageSizeAppliedToRef = useRef<RimeEngine | null>(null)
   useEffect(() => {
-    if (engine && pageSize !== undefined) {
-      engine
-        .setPageSize(pageSize)
-        .catch((err) => setError(err instanceof Error ? err : new Error(String(err))))
+    if (!engine) return
+    if (pageSize !== undefined) {
+      pageSizeAppliedToRef.current = engine
+    } else if (pageSizeAppliedToRef.current !== engine) {
+      return
+    } else {
+      pageSizeAppliedToRef.current = null
     }
+    engine
+      .setPageSize(pageSize ?? 0)
+      .catch((err) => setError(err instanceof Error ? err : new Error(String(err))))
   }, [engine, pageSize])
 
   // --- deploy the initial schema once the engine exists ---

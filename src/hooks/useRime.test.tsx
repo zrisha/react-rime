@@ -115,6 +115,28 @@ describe('useRime composition', () => {
     expect(h.setPageSize).toHaveBeenLastCalledWith(5)
   })
 
+  // 0 is the engine's "unset" sentinel: the wasm-side page_size override falls
+  // back to the schema's own menu/page_size (my_rime's librime patch).
+  it('resets to the schema default when pageSize is removed', async () => {
+    const { result, rerender } = renderHook(
+      ({ pageSize }: { pageSize?: number }) => useRime({ pageSize }),
+      { initialProps: { pageSize: 9 as number | undefined } },
+    )
+    await waitFor(() => expect(h.deployHandler).not.toBeNull())
+    act(() => h.deployHandler!('success', []))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(h.setPageSize).toHaveBeenLastCalledWith(9)
+
+    rerender({ pageSize: undefined })
+
+    await waitFor(() => expect(h.setPageSize).toHaveBeenCalledTimes(2))
+    expect(h.setPageSize).toHaveBeenLastCalledWith(0)
+
+    // No custom size is in effect anymore, so no further resets either.
+    rerender({ pageSize: undefined })
+    expect(h.setPageSize).toHaveBeenCalledTimes(2)
+  })
+
   it('does not call setPageSize when the option is omitted', async () => {
     const { result } = renderHook(() => useRime())
     await waitFor(() => expect(h.deployHandler).not.toBeNull())
