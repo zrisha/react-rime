@@ -170,6 +170,36 @@ export interface UseRime {
 }
 
 /**
+ * ImeControl fields useRime deliberately keeps to itself — plumbing it owns
+ * (deploy state, syncOptions) or renames (schemaId → schema). Keep in sync with
+ * the destructure in the return memo.
+ */
+type ControlOnlyField =
+  | 'schemaId'
+  | 'selectIME'
+  | 'setSchema'
+  | 'deployed'
+  | 'setDeployed'
+  | 'variantIndex'
+  | 'syncOptions'
+
+/**
+ * useRime re-exposes ImeControl by spreading it, which means a field added to
+ * ImeControl reaches consumers at runtime automatically — and TypeScript does
+ * not excess-property-check spread results, so it would do so without being
+ * declared on UseRime: undocumented public API. This fails to compile in that
+ * case; the fix is to either declare the field on UseRime or, if it's internal,
+ * add it to ControlOnlyField and the destructure.
+ *
+ * Exported only to satisfy noUnusedLocals — index.ts re-exports by name, so it
+ * stays out of the package's public types.
+ */
+type MustBeNever<T extends never> = T
+export type AssertNoLeakedControlFields = MustBeNever<
+  Exclude<Exclude<keyof ImeControl, ControlOnlyField>, keyof UseRime>
+>
+
+/**
  * The primary hook. Creates and owns a RIME engine instance, runs the
  * composition state machine, and exposes the committed-text buffer plus schema
  * and option controls. The entire library is usable through the object it
