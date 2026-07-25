@@ -149,6 +149,42 @@ describe('useRime composition', () => {
     expect(result.current.preedit.body).toBe('n')
   })
 
+  // engine.setIME resets the session, so a composition started under the old
+  // schema is already dead in the engine. Leaving it on screen meant the panel
+  // showed dead candidates until some later interaction (e.g. paging) happened
+  // to clear it.
+  it('clears the composition when the schema changes', async () => {
+    h.processImpl = () => ({
+      state: 1,
+      head: '',
+      body: 'n',
+      tail: '',
+      page: 0,
+      isLastPage: true,
+      highlighted: 0,
+      candidates: [{ text: '你' }, { text: '尼' }],
+    })
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(h.deployHandler).not.toBeNull())
+    act(() => h.deployHandler!('success', []))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    await act(async () => {
+      result.current.onKeyDown(kbd('n', 'KeyN'))
+    })
+    expect(result.current.composing).toBe(true)
+    expect(result.current.candidates).toHaveLength(2)
+
+    await act(async () => {
+      await result.current.setSchema('wubi86')
+    })
+
+    expect(result.current.composing).toBe(false)
+    expect(result.current.candidates).toHaveLength(0)
+    expect(result.current.preedit).toEqual({ head: '', body: '', tail: '' })
+    expect(result.current.schema).toBe('wubi86')
+  })
+
   it('commits a candidate to the text buffer (COMMITTED)', async () => {
     h.processImpl = () => ({
       state: 1,

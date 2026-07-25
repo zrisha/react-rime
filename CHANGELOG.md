@@ -41,6 +41,10 @@ tracking the repo:
   `useImeControl`, silently dropped in the re-export (same class of gap as
   `pageSize`). The re-export is now a spread, so `ImeControl` fields can't fall
   through it again.
+- **`setSchema` now clears the composition** — `engine.setIME` resets the
+  librime session, so a preedit started under the old schema was already dead
+  in the engine but stayed on screen, showing candidates that did nothing,
+  until some later interaction (e.g. paging) happened to clear it.
 - **Self-hosting clarification** — `react-rime/worker.js` can be self-hosted,
   but it still streams engine binaries and dictionaries from jsdelivr;
   air-gapped deployment is not yet supported.

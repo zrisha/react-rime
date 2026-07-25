@@ -499,6 +499,12 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
   )
 
   const setSchema = useEventCallback(async (id: string) => {
+    // engine.setIME resets the librime session, destroying any in-flight
+    // composition — so drop ours up front rather than leaving a preedit and
+    // candidates on screen that belong to the schema we're leaving. Clearing
+    // first (not after) means the panel goes away when the user picks the
+    // schema, not when the switch finishes.
+    clearComposition()
     try {
       await control.setSchema(id)
     } catch (err) {
