@@ -46,7 +46,7 @@ const RIME_OPTIONS = [
   { key: 'isFullWidth', option: 'full_shape', toggle: 'changeWidth', default: false, persist: true },
   { key: 'isExtendedCharset', option: 'extended_charset', toggle: 'changeCharset', default: false, persist: true },
   { key: 'isEnglishPunctuation', option: 'ascii_punct', toggle: 'changePunctuation', default: false, persist: true },
-  { key: 'enableEmoji', option: 'emoji_suggestion', toggle: 'changeEmoji', default: true, persist: true },
+  { key: 'enableEmoji', option: 'emoji_suggestion', toggle: 'changeEmoji', default: false, persist: true },
 ] as const satisfies readonly RimeOptionSpec[]
 
 type OptionKey = (typeof RIME_OPTIONS)[number]['key']
