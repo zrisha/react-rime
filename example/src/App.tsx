@@ -92,7 +92,7 @@ export function App() {
                   type="button"
                   data-rime-candidate=""
                   data-highlighted={index === rime.highlighted || undefined}
-                  onClick={() => void rime.selectCandidate(index)}
+                  {...rime.getCandidateProps(index)}
                 >
                   <span data-rime-label="">{rime.selectLabels?.[index] ?? index + 1}</span>
                   <span data-rime-text="">{candidate.text}</span>
@@ -104,7 +104,7 @@ export function App() {
               type="button"
               data-rime-page="prev"
               disabled={rime.page === 0}
-              onClick={() => void rime.changePage(true)}
+              {...rime.getPagingProps(true)}
             >
               ‹
             </button>
@@ -112,7 +112,7 @@ export function App() {
               type="button"
               data-rime-page="next"
               disabled={rime.isLastPage}
-              onClick={() => void rime.changePage(false)}
+              {...rime.getPagingProps(false)}
             >
               ›
             </button>

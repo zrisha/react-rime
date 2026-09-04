@@ -7,6 +7,7 @@ export type {
   UseRimeOptions,
   RimeInputProps,
   RimeInputPropsOverrides,
+  RimeButtonProps,
 } from './hooks/useRime'
 
 // Focused hooks (advanced)

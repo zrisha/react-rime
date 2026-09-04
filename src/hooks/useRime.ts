@@ -21,6 +21,14 @@ function nativeOf(e: AnyKeyboardEvent): KeyboardEvent {
   return 'nativeEvent' in e ? e.nativeEvent : e
 }
 
+// Shared by getCandidateProps/getPagingProps: preventDefault on pointerdown
+// stops the browser's default focus-shift to the button, so the input never
+// blurs in the first place. Module-level (not per-render) since it closes
+// over nothing.
+function preventFocusSteal(e: React.PointerEvent): void {
+  e.preventDefault()
+}
+
 export interface UseRimeOptions extends RimeEngineOptions, UseImeControlOptions {
   /** Initial committed-text value (uncontrolled buffer). */
   defaultText?: string
@@ -67,6 +75,19 @@ export interface RimeInputProps<T extends HTMLTextAreaElement | HTMLInputElement
   autoCorrect: string
   autoComplete: string
   spellCheck: boolean
+}
+
+/**
+ * What {@link UseRime.getCandidateProps} and {@link UseRime.getPagingProps}
+ * return — spread onto a candidate/paging button. `onPointerDown` calls
+ * `preventDefault()` so the browser never moves focus off the input on tap;
+ * without it, focus (and on iOS the on-screen keyboard) leaves the input the
+ * instant you press the button, and re-focusing afterwards is too late to
+ * bring the keyboard back since it's no longer inside the user gesture.
+ */
+export interface RimeButtonProps {
+  onClick: () => void
+  onPointerDown: (e: React.PointerEvent) => void
 }
 
 /** Everything {@link useRime} returns. Each field shows its description on hover. */
@@ -121,10 +142,36 @@ export interface UseRime {
   onKeyUp: (e: AnyKeyboardEvent) => void
 
   // --- candidate / page actions ---
-  /** Commit the candidate at `index` on the current page. */
+  /**
+   * Commit the candidate at `index` on the current page. Wiring this
+   * directly to a button's `onClick` reproduces the iOS keyboard-dismissal
+   * bug {@link getCandidateProps} exists to avoid — prefer that for pointer
+   * UIs, and reach for this only when you're driving selection some other
+   * way (e.g. a non-pointer keyboard shortcut).
+   */
   selectCandidate: (index: number) => Promise<void>
-  /** Page through candidates; `true` goes back, `false` goes forward. */
+  /**
+   * Page through candidates; `true` goes back, `false` goes forward. Same
+   * caveat as {@link selectCandidate} — prefer {@link getPagingProps} for a
+   * button's `onClick`.
+   */
   changePage: (backward: boolean) => Promise<void>
+  /**
+   * One spread wires a candidate button: `<button {...rime.getCandidateProps(i)}>`.
+   * Calls {@link selectCandidate} and keeps focus on the input (see
+   * {@link RimeButtonProps}). Spread this last — a trailing `onClick` you add
+   * after the spread replaces the hook's, not merges with it; if you need
+   * your own click handler too, call `selectCandidate(i)` from it directly
+   * instead of spreading this.
+   */
+  getCandidateProps: (index: number) => RimeButtonProps
+  /**
+   * One spread wires a paging button: `<button {...rime.getPagingProps(true)}>`.
+   * Calls {@link changePage} and keeps focus on the input (see
+   * {@link RimeButtonProps}). Same caveat as {@link getCandidateProps} about
+   * spread order.
+   */
+  getPagingProps: (backward: boolean) => RimeButtonProps
   /** Cancel the in-progress composition, discarding the preedit (Escape). */
   cancelComposition: () => Promise<void>
   /** Commit the currently highlighted candidate (Space). */
@@ -507,6 +554,22 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
     },
   )
 
+  const getCandidateProps = useCallback(
+    (index: number): RimeButtonProps => ({
+      onClick: () => void selectCandidate(index),
+      onPointerDown: preventFocusSteal,
+    }),
+    [selectCandidate],
+  )
+
+  const getPagingProps = useCallback(
+    (backward: boolean): RimeButtonProps => ({
+      onClick: () => void changePage(backward),
+      onPointerDown: preventFocusSteal,
+    }),
+    [changePage],
+  )
+
   // Semantic wrappers over the key protocol so pointer-driven UIs never need
   // to fabricate KeyboardEvents. Each is a no-op unless composing.
   const sendIfComposing = useEventCallback(
@@ -625,6 +688,8 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
         onKeyUp,
         selectCandidate,
         changePage,
+        getCandidateProps,
+        getPagingProps,
         cancelComposition,
         commitHighlighted,
         commitRaw,

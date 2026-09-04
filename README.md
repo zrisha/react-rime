@@ -47,7 +47,7 @@ export function Editor() {
         <ul>
           {rime.candidates.map((c, i) => (
             <li key={i}>
-              <button onClick={() => rime.selectCandidate(i)}>
+              <button {...rime.getCandidateProps(i)}>
                 {rime.selectLabels?.[i] ?? i + 1}. {c.text}
                 {c.comment ? ` ${c.comment}` : ''}
               </button>
@@ -116,6 +116,8 @@ Exactly one input under the provider should spread `getInputProps()`.
 | `onKeyDown` / `onKeyUp`   | Forward your element's key events here.                |
 | `selectCandidate(i)`      | Commit the candidate at index `i`.                    |
 | `changePage(backward)`    | Page through candidates.                              |
+| `getCandidateProps(i)`    | One spread wires a candidate button: calls `selectCandidate(i)` and keeps focus on the input so tapping doesn't dismiss the mobile keyboard. |
+| `getPagingProps(backward)`| Same, for a paging button, calling `changePage(backward)`. |
 | `cancelComposition()`     | Discard the preedit (Escape), no KeyboardEvent needed. |
 | `commitHighlighted()` / `commitRaw()` | Commit the highlighted candidate / the raw preedit. |
 | `highlightNext()` / `highlightPrev()` | Move the candidate highlight.             |

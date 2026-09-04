@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({
   selectImpl: (_i: number): string => JSON.stringify({ state: 0, committed: '' }),
   setPageSize: vi.fn(async () => {}),
   setOption: vi.fn(async () => {}),
+  changePage: vi.fn(async () => JSON.stringify({ state: 3 })),
 }))
 
 vi.mock('../engine/engine', () => {
@@ -18,7 +19,7 @@ vi.mock('../engine/engine', () => {
     deploy: vi.fn(async () => {}),
     process: vi.fn(async (k: string) => h.processImpl(k)),
     selectCandidateOnCurrentPage: vi.fn(async (i: number) => h.selectImpl(i)),
-    changePage: vi.fn(async () => JSON.stringify({ state: 3 })),
+    changePage: h.changePage,
     resetUserDirectory: vi.fn(async () => {}),
     FS: {},
     onDeployStatus: (cb: (s: string, sc: string[]) => void) => {
@@ -391,6 +392,51 @@ describe('useRime composition', () => {
     expect(consumerKeyDown).toHaveBeenCalled()
   })
 
+  it('getCandidateProps suppresses pointerdown focus-steal and wires onClick to selectCandidate', async () => {
+    h.processImpl = () => ({
+      state: 1,
+      head: '',
+      body: 'n',
+      tail: '',
+      page: 0,
+      isLastPage: true,
+      highlighted: 0,
+      candidates: [{ text: '你' }, { text: '尼' }],
+    })
+    h.selectImpl = (i) => JSON.stringify({ state: 0, committed: i === 0 ? '你' : '尼' })
+
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    await act(async () => {
+      result.current.onKeyDown(kbd('n', 'KeyN'))
+    })
+
+    const props = result.current.getCandidateProps(0)
+    const preventDefault = vi.fn()
+    props.onPointerDown({ preventDefault } as unknown as React.PointerEvent)
+    expect(preventDefault).toHaveBeenCalled()
+
+    await act(async () => {
+      props.onClick()
+    })
+    expect(result.current.text).toBe('你')
+  })
+
+  it('getPagingProps suppresses pointerdown focus-steal and wires onClick to changePage', async () => {
+    const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    const props = result.current.getPagingProps(true)
+    const preventDefault = vi.fn()
+    props.onPointerDown({ preventDefault } as unknown as React.PointerEvent)
+    expect(preventDefault).toHaveBeenCalled()
+
+    await act(async () => {
+      props.onClick()
+    })
+    expect(h.changePage).toHaveBeenLastCalledWith(true)
+  })
+
   it('returns identity-stable functions across state changes', async () => {
     const { result } = renderHook(() => useRime())
     await waitFor(() => expect(result.current.ready).toBe(true))
@@ -405,6 +451,8 @@ describe('useRime composition', () => {
     expect(second.onKeyUp).toBe(first.onKeyUp)
     expect(second.selectCandidate).toBe(first.selectCandidate)
     expect(second.changePage).toBe(first.changePage)
+    expect(second.getCandidateProps).toBe(first.getCandidateProps)
+    expect(second.getPagingProps).toBe(first.getPagingProps)
     expect(second.setSchema).toBe(first.setSchema)
     expect(second.changeLanguage).toBe(first.changeLanguage)
     expect(second.changeVariant).toBe(first.changeVariant)
