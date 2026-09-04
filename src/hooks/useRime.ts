@@ -31,6 +31,20 @@ export interface UseRimeOptions extends RimeEngineOptions, UseImeControlOptions 
    * to `undefined` to restore the schema's own default (usually 5).
    */
   pageSize?: number
+  /**
+   * Tapping and releasing Shift alone (with no other key in between) calls
+   * `changeLanguage()`. Not obviously discoverable to end users and easy to
+   * trigger by accident, so it defaults to `false` — opt in explicitly.
+   */
+  enableShiftToggle?: boolean
+  /** Forward `F4` to RIME's schema-selection menu. Default `false`. */
+  enableSchemaMenu?: boolean
+  /**
+   * Forward `Control+\`` (a schema-defined binding) to RIME. Default `false`
+   * since it can collide with the host page's own bindings (e.g. VS Code's
+   * terminal toggle).
+   */
+  enableControlBacktick?: boolean
 }
 
 /** Consumer handlers merged into {@link UseRime.getInputProps}'s result. */
@@ -221,7 +235,17 @@ export type AssertNoLeakedControlFields = MustBeNever<
  * ```
  */
 export function useRime(options: UseRimeOptions = {}): UseRime {
-  const { workerUrl, schema, userDict, defaultText, onCommit, pageSize } = options
+  const {
+    workerUrl,
+    schema,
+    userDict,
+    defaultText,
+    onCommit,
+    pageSize,
+    enableSchemaMenu = false,
+    enableControlBacktick = false,
+    enableShiftToggle = false,
+  } = options
 
   const [engine, setEngine] = useState<RimeEngine | null>(null)
   const [ready, setReady] = useState(false)
@@ -428,11 +452,11 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
       }
       const e = nativeOf(evt)
       if (e.key === 'Shift') {
-        exclusiveShiftRef.current = true
+        exclusiveShiftRef.current = enableShiftToggle
         return
       }
       exclusiveShiftRef.current = false
-      const rimeKey = toRimeKey(e, composingRef.current)
+      const rimeKey = toRimeKey(e, composingRef.current, { enableSchemaMenu, enableControlBacktick })
       if (!rimeKey) return
       // Mark composing before the worker responds so keyups in flight are
       // forwarded as releases (my_rime sets `editing` at the same point).

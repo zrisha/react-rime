@@ -73,7 +73,15 @@ describe('toRimeKey', () => {
 
   it('forwards Control combinations to RIME while composing', () => {
     expect(toRimeKey(kbd({ key: 'a', code: 'KeyA', ctrl: true }))).toBe('{Control+a}')
-    expect(toRimeKey(kbd({ key: '`', code: 'Backquote', ctrl: true }))).toBe('{Control+quoteleft}')
+  })
+
+  it('blocks Control+` and F4 unless explicitly enabled, even while composing', () => {
+    expect(toRimeKey(kbd({ key: '`', code: 'Backquote', ctrl: true }))).toBeNull()
+    expect(toRimeKey(kbd({ key: 'F4', code: 'F4' }))).toBeNull()
+    expect(
+      toRimeKey(kbd({ key: '`', code: 'Backquote', ctrl: true }), true, { enableControlBacktick: true }),
+    ).toBe('{Control+quoteleft}')
+    expect(toRimeKey(kbd({ key: 'F4', code: 'F4' }), true, { enableSchemaMenu: true })).toBe('{F4}')
   })
 
   it('builds modifier prefixes in order', () => {
@@ -100,11 +108,18 @@ describe('toRimeKey outside a composition (composing = false)', () => {
     expect(toRimeKey(kbd({ key: 'v', code: 'KeyV', alt: true }), false)).toBeNull()
   })
 
-  it('still forwards printable keys, F4, and the Control allowlist', () => {
+  it('still forwards printable keys', () => {
     expect(toRimeKey(kbd({ key: 'n', code: 'KeyN' }), false)).toBe('n')
     expect(toRimeKey(kbd({ key: '?', code: 'Slash', shift: true }), false)).toBe('?')
-    expect(toRimeKey(kbd({ key: 'F4', code: 'F4' }), false)).toBe('{F4}')
-    expect(toRimeKey(kbd({ key: '`', code: 'Backquote', ctrl: true }), false)).toBe('{Control+quoteleft}')
+  })
+
+  it('keeps F4 and the Control allowlist native unless explicitly enabled', () => {
+    expect(toRimeKey(kbd({ key: 'F4', code: 'F4' }), false)).toBeNull()
+    expect(toRimeKey(kbd({ key: '`', code: 'Backquote', ctrl: true }), false)).toBeNull()
+    expect(toRimeKey(kbd({ key: 'F4', code: 'F4' }), false, { enableSchemaMenu: true })).toBe('{F4}')
+    expect(
+      toRimeKey(kbd({ key: '`', code: 'Backquote', ctrl: true }), false, { enableControlBacktick: true }),
+    ).toBe('{Control+quoteleft}')
   })
 })
 

@@ -408,8 +408,20 @@ describe('useRime composition', () => {
     expect(second.setText).toBe(first.setText)
   })
 
-  it('toggles English mode on a bare Shift tap, but not around other keys', async () => {
+  it('does not toggle on a bare Shift tap unless enableShiftToggle is set', async () => {
     const { result } = renderHook(() => useRime())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(result.current.isEnglish).toBe(false)
+
+    await act(async () => {
+      result.current.onKeyDown(kbd('Shift', 'ShiftLeft'))
+      result.current.onKeyUp(kbd('Shift', 'ShiftLeft'))
+    })
+    expect(result.current.isEnglish).toBe(false)
+  })
+
+  it('toggles English mode on a bare Shift tap, but not around other keys', async () => {
+    const { result } = renderHook(() => useRime({ enableShiftToggle: true }))
     await waitFor(() => expect(result.current.ready).toBe(true))
     expect(result.current.isEnglish).toBe(false)
 

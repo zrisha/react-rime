@@ -94,6 +94,9 @@ Exactly one input under the provider should spread `getInputProps()`.
 | `onCommit`    | function | —              | Called with each committed string.           |
 | `pageSize`    | number   | schema's own   | Candidates per page; re-applied when it changes, and setting it back to `undefined` restores the schema default (usually 5). |
 | `userDict`    | boolean  | `true`         | Whether librime learns from what the user types. `false` turns learning off and deletes anything already learned — see [Learning](#learning-from-what-the-user-types). |
+| `enableShiftToggle` | boolean | `false`  | A bare `Shift` tap toggles English ⇄ Chinese. Not discoverable and easy to trigger by accident, so it's opt-in — see [Keyboard behavior](#keyboard-behavior). |
+| `enableSchemaMenu` | boolean | `false`   | Forward `F4` to RIME's schema-selection menu. |
+| `enableControlBacktick` | boolean | `false` | Forward `` Ctrl+` `` (a schema-defined binding) to RIME. Off by default since it collides with common host-app bindings (e.g. VS Code's terminal toggle). |
 
 ### Returned state & actions (selected)
 
@@ -149,8 +152,11 @@ your UI's help text.
 
 **When not composing**, printable keys start a composition (unless English
 mode is on) and everything else — editing keys, arrows, OS shortcuts — keeps
-its native behavior. Two global gestures: a bare `Shift` tap toggles
-English ⇄ Chinese, and `F4` or `` Ctrl+` `` opens RIME's schema menu.
+its native behavior. Three more gestures exist but are opt-in (all default
+`false`, since none are discoverable and `` Ctrl+` `` in particular collides
+with common host-app bindings): `enableShiftToggle` makes a bare `Shift` tap
+toggle English ⇄ Chinese, and `enableSchemaMenu` / `enableControlBacktick`
+forward `F4` / `` Ctrl+` `` to RIME's schema menu.
 
 All of these also exist as methods (`commitHighlighted()`,
 `cancelComposition()`, `changePage()`, …) so pointer-driven UIs don't need a

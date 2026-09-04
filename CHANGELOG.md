@@ -8,13 +8,20 @@ Initial release: headless React hooks for the RIME input-method engine
 Notable decisions made during pre-release review, called out for anyone
 tracking the repo:
 
-- **Key handling** — outside a composition, only printable keys, `F4`, and
-  `` Ctrl+` `` reach the engine; editing/navigation keys and OS shortcuts keep
-  their native behavior. While composing, all combos (including `Ctrl+x`) are
-  forwarded to RIME, matching upstream my_rime. `toRimeKey` gained a
-  `composing` parameter (defaults to `true`, the old translate-everything
-  behavior).
-- **Bare Shift tap** toggles English mode (the standard IME gesture).
+- **Key handling** — outside a composition, only printable keys reach the
+  engine; editing/navigation keys and OS shortcuts keep their native behavior.
+  While composing, all combos (including `Ctrl+x`) are forwarded to RIME,
+  matching upstream my_rime. `toRimeKey` gained a `composing` parameter
+  (defaults to `true`, the old translate-everything behavior).
+- **`F4` (schema menu) and `` Ctrl+` `` are opt-in** — `useRime({
+  enableSchemaMenu, enableControlBacktick })`, both default `false`. Neither
+  is discoverable to end users, and `` Ctrl+` `` in particular collides with
+  common host-app bindings (e.g. VS Code's terminal toggle), so my_rime's
+  always-on behavior isn't a safe default for an embeddable library.
+- **Bare Shift tap** toggles English mode, but only when `useRime({
+  enableShiftToggle: true })` — same reasoning as `F4`/`` Ctrl+` ``: it's a
+  standard IME gesture but not an obvious one, and easy to trigger by
+  accident. Default `false`.
 - **ESM-only package** — the `main` field was removed; use `import`.
 - **Hooks-only: the unstyled components were removed** (`RimeTextarea`,
   `CandidatePanel`, `SchemaSelector`). `getInputProps()` makes them

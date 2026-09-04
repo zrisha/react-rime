@@ -68,21 +68,38 @@ function wrap(s: string): string {
   return `{${s}}`
 }
 
+/** Toggles for RIME shortcuts that aren't obviously discoverable and can
+ * collide with the host page's own bindings (e.g. `Control+\`` in VS Code).
+ * Both default to `false` — opt in explicitly if you want them forwarded. */
+export interface RimeKeyOptions {
+  /** Forward `F4` to RIME's schema-selection menu. */
+  enableSchemaMenu?: boolean
+  /** Forward `Control+\`` (schema-defined binding) to RIME. */
+  enableControlBacktick?: boolean
+}
+
 /**
  * Translates a DOM keydown event into a RIME key string.
  * Returns null for keys that should be ignored (standalone modifiers,
  * unrecognised shortcuts, etc.).
  *
  * `composing` mirrors my_rime's edit-mode gate: while a composition is active
- * every key belongs to RIME, but outside one only printable keys (and F4, the
- * schema menu) are translated — Backspace, Enter, arrows and modifier
+ * every key belongs to RIME, but outside one only printable keys (and, if
+ * enabled, F4) are translated — Backspace, Enter, arrows and modifier
  * shortcuts return null so they keep their native behavior. Pass your
  * composition state; the default (`true`) translates everything.
  */
-export function toRimeKey(e: KeyboardEvent, composing = true): string | null {
+export function toRimeKey(
+  e: KeyboardEvent,
+  composing = true,
+  { enableSchemaMenu = false, enableControlBacktick = false }: RimeKeyOptions = {},
+): string | null {
   const { code, key } = e
 
   if (key === 'Shift' || key === 'Control' || key === 'Meta') {
+    return null
+  }
+  if (key === 'F4' && !enableSchemaMenu) {
     return null
   }
 
@@ -93,6 +110,10 @@ export function toRimeKey(e: KeyboardEvent, composing = true): string | null {
   const hasAlt = e.getModifierState('Alt')
   const hasShift = e.getModifierState('Shift')
   const isShortcut = hasControl || hasMeta || hasAlt || (hasShift && !isPrintableKey)
+
+  if (hasControl && CONTROL_ALLOWLIST.includes(key) && !enableControlBacktick) {
+    return null
+  }
 
   if (!composing) {
     if (!isPrintableKey && key !== 'F4') {
