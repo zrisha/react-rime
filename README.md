@@ -111,7 +111,7 @@ Exactly one input under the provider should spread `getInputProps()`.
 | `highlighted`             | Index of the highlighted candidate.                   |
 | `selectLabels`            | Selection labels (e.g. `1`–`9`), if provided.         |
 | `page` / `isLastPage`     | Candidate paging state.                               |
-| `getInputProps()`         | One spread wires an input: ref, value, key handlers.  |
+| `getInputProps()`         | One spread wires an input: ref, value, key handlers, and disables browser autocorrect/autocapitalize/autocomplete/spellcheck. |
 | `inputRef`                | Attach to your input/textarea for caret-aware commit. |
 | `onKeyDown` / `onKeyUp`   | Forward your element's key events here.                |
 | `selectCandidate(i)`      | Commit the candidate at index `i`.                    |

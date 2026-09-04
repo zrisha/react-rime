@@ -374,6 +374,10 @@ describe('useRime composition', () => {
     const consumerKeyDown = vi.fn()
     const props = result.current.getInputProps({ onKeyDown: consumerKeyDown })
     expect(props.value).toBe('')
+    expect(props.autoCapitalize).toBe('off')
+    expect(props.autoCorrect).toBe('off')
+    expect(props.autoComplete).toBe('off')
+    expect(props.spellCheck).toBe(false)
 
     await act(async () => {
       props.onChange({ target: { value: 'abc' } } as React.ChangeEvent<HTMLTextAreaElement>)

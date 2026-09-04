@@ -63,6 +63,10 @@ export interface RimeInputProps<T extends HTMLTextAreaElement | HTMLInputElement
   onChange: React.ChangeEventHandler<T>
   onKeyDown: React.KeyboardEventHandler<T>
   onKeyUp: React.KeyboardEventHandler<T>
+  autoCapitalize: string
+  autoCorrect: string
+  autoComplete: string
+  spellCheck: boolean
 }
 
 /** Everything {@link useRime} returns. Each field shows its description on hover. */
@@ -100,8 +104,11 @@ export interface UseRime {
   // --- input wiring ---
   /**
    * One spread wires an input: `<textarea {...rime.getInputProps()} />`.
-   * Binds ref, value, onChange, onKeyDown and onKeyUp; pass your own handlers
-   * or ref via `overrides` and they run after the hook's.
+   * Binds ref, value, onChange, onKeyDown, onKeyUp, and disables the
+   * browser's word-level assists (autocapitalize/autocorrect/autocomplete/
+   * spellcheck), which fight a roman-input buffer. Pass your own handlers or
+   * ref via `overrides` and they run after the hook's; other attributes can
+   * be overridden by setting them after the spread.
    */
   getInputProps: <T extends HTMLTextAreaElement | HTMLInputElement = HTMLTextAreaElement>(
     overrides?: RimeInputPropsOverrides<T>,
@@ -537,6 +544,14 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
         onKeyUp(e)
         overrides.onKeyUp?.(e)
       },
+      // The buffer is roman/pinyin input, not real words, so the browser's
+      // word-level assists (autocorrect, autocapitalize, spellcheck,
+      // autocomplete) fight the user rather than help. Consumers can still
+      // override any of these by setting the attribute after the spread.
+      autoCapitalize: 'off',
+      autoCorrect: 'off',
+      autoComplete: 'off',
+      spellCheck: false,
     }),
     // onKeyDown/onKeyUp are identity-stable; value is the real dependency
     // eslint-disable-next-line react-hooks/exhaustive-deps
