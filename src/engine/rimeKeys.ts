@@ -14,6 +14,9 @@ export const RIME_KEY_MAP: { [key: string]: string | undefined } = {
   PageUp: 'Page_Up',
   PageDown: 'Page_Down',
   Alt: 'Alt_L',
+  Shift: 'Shift_L',
+  Control: 'Control_L',
+  Meta: 'Super_L',
   ArrowUp: 'Up',
   ArrowRight: 'Right',
   ArrowDown: 'Down',
@@ -129,7 +132,19 @@ export function toRimeKey(e: KeyboardEvent, composing = true): string | null {
  * Only meaningful while composing; callers gate on their composition state.
  */
 export function toRimeKeyRelease(e: KeyboardEvent): string | null {
-  const { key } = e
-  const mapped = RIME_KEY_MAP[key] || key
+  const { code, key } = e
+  if (/^[0-9a-z]$/i.test(key)) {
+    return wrap(`Release+${key}`)
+  }
+  let mapped = RIME_KEY_MAP[key]
+  if (mapped === undefined) {
+    return null
+  }
+  if (code.endsWith('Right')) {
+    if (key === 'Alt') mapped = 'Alt_R'
+    else if (key === 'Shift') mapped = 'Shift_R'
+    else if (key === 'Control') mapped = 'Control_R'
+    else if (key === 'Meta') mapped = 'Super_R'
+  }
   return wrap(`Release+${mapped}`)
 }

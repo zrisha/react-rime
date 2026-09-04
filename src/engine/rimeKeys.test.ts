@@ -114,6 +114,19 @@ describe('toRimeKeyRelease', () => {
   })
   it('wraps released named keys via the map', () => {
     expect(toRimeKeyRelease(kbd({ key: 'Enter' }))).toBe('{Release+Return}')
-    expect(toRimeKeyRelease(kbd({ key: 'Shift' }))).toBe('{Release+Shift}')
+    expect(toRimeKeyRelease(kbd({ key: 'Shift', code: 'ShiftLeft' }))).toBe('{Release+Shift_L}')
+    expect(toRimeKeyRelease(kbd({ key: 'Control', code: 'ControlLeft' }))).toBe('{Release+Control_L}')
+    expect(toRimeKeyRelease(kbd({ key: 'Meta', code: 'MetaLeft' }))).toBe('{Release+Super_L}')
+  })
+  it('is right-variant-aware via code, matching toRimeKey', () => {
+    expect(toRimeKeyRelease(kbd({ key: 'Alt', code: 'AltRight' }))).toBe('{Release+Alt_R}')
+    expect(toRimeKeyRelease(kbd({ key: 'Shift', code: 'ShiftRight' }))).toBe('{Release+Shift_R}')
+    expect(toRimeKeyRelease(kbd({ key: 'Control', code: 'ControlRight' }))).toBe('{Release+Control_R}')
+    expect(toRimeKeyRelease(kbd({ key: 'Meta', code: 'MetaRight' }))).toBe('{Release+Super_R}')
+  })
+  it('fails closed for keys with no known librime keysym, instead of guessing', () => {
+    expect(toRimeKeyRelease(kbd({ key: 'CapsLock', code: 'CapsLock' }))).toBeNull()
+    expect(toRimeKeyRelease(kbd({ key: 'PrintScreen', code: 'PrintScreen' }))).toBeNull()
+    expect(toRimeKeyRelease(kbd({ key: 'ContextMenu', code: 'ContextMenu' }))).toBeNull()
   })
 })
