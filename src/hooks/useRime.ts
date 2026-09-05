@@ -29,6 +29,25 @@ function preventFocusSteal(e: React.PointerEvent): void {
   e.preventDefault()
 }
 
+// Fallback for callers that don't spread getCandidateProps/getPagingProps
+// (see RimeButtonProps). Two invariants: it must run before the caller's
+// first await, so a raw click is still inside the user gesture (iOS only
+// re-shows the keyboard from inside one); and it must be a no-op when focus
+// never left, because a redundant focus() still makes mobile Safari scroll
+// the input into view. activeElement is read via getRootNode() so the check
+// holds inside a shadow root.
+function refocusInput(el: HTMLTextAreaElement | HTMLInputElement | null): void {
+  if (!el) return
+  const root = el.getRootNode() as Document | ShadowRoot
+  if (root.activeElement !== el) el.focus({ preventScroll: true })
+}
+
+/** Input selection captured before a refocus, so focus handlers can't move it. */
+interface Caret {
+  start: number | null
+  end: number | null
+}
+
 export interface UseRimeOptions extends RimeEngineOptions, UseImeControlOptions {
   /** Initial committed-text value (uncontrolled buffer). */
   defaultText?: string
@@ -82,8 +101,10 @@ export interface RimeInputProps<T extends HTMLTextAreaElement | HTMLInputElement
  * return — spread onto a candidate/paging button. `onPointerDown` calls
  * `preventDefault()` so the browser never moves focus off the input on tap;
  * without it, focus (and on iOS the on-screen keyboard) leaves the input the
- * instant you press the button, and re-focusing afterwards is too late to
- * bring the keyboard back since it's no longer inside the user gesture.
+ * instant you press the button. {@link UseRime.selectCandidate} does refocus
+ * the input as a fallback, but only synchronously at the start of the click
+ * (still inside the user gesture); on iOS that means a keyboard hide/show
+ * flicker rather than a seamless tap.
  */
 export interface RimeButtonProps {
   onClick: () => void
@@ -143,11 +164,9 @@ export interface UseRime {
 
   // --- candidate / page actions ---
   /**
-   * Commit the candidate at `index` on the current page. Wiring this
-   * directly to a button's `onClick` reproduces the iOS keyboard-dismissal
-   * bug {@link getCandidateProps} exists to avoid — prefer that for pointer
-   * UIs, and reach for this only when you're driving selection some other
-   * way (e.g. a non-pointer keyboard shortcut).
+   * Commit the candidate at `index` on the current page. Refocuses the input
+   * if it lost focus; for pointer UIs prefer {@link getCandidateProps}, which
+   * keeps focus from leaving in the first place (see {@link RimeButtonProps}).
    */
   selectCandidate: (index: number) => Promise<void>
   /**
@@ -159,10 +178,10 @@ export interface UseRime {
   /**
    * One spread wires a candidate button: `<button {...rime.getCandidateProps(i)}>`.
    * Calls {@link selectCandidate} and keeps focus on the input (see
-   * {@link RimeButtonProps}). Spread this last — a trailing `onClick` you add
-   * after the spread replaces the hook's, not merges with it; if you need
-   * your own click handler too, call `selectCandidate(i)` from it directly
-   * instead of spreading this.
+   * {@link RimeButtonProps}). If you need your own click handler too, spread
+   * this first and add `onClick` after it — a trailing `onClick` replaces the
+   * hook's rather than merging, so call `selectCandidate(i)` from yours; the
+   * spread still contributes `onPointerDown`, which is what keeps focus.
    */
   getCandidateProps: (index: number) => RimeButtonProps
   /**
@@ -413,7 +432,7 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
 
   // --- text insertion at the input's caret (falls back to append) ---
   const insert = useCallback(
-    (toInsert: string) => {
+    (toInsert: string, caret?: Caret) => {
       const el = inputRef.current
       const current = textRef.current
       if (!el) {
@@ -427,8 +446,8 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
         onCommit?.(toInsert)
         return
       }
-      const start = el.selectionStart ?? current.length
-      const end = el.selectionEnd ?? current.length
+      const start = caret?.start ?? el.selectionStart ?? current.length
+      const end = caret?.end ?? el.selectionEnd ?? current.length
       const next = current.slice(0, start) + toInsert + current.slice(end)
       setText(next)
       onCommit?.(toInsert)
@@ -452,13 +471,13 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
   }, [])
 
   const analyze = useCallback(
-    async (result: RimeResult, rimeKey: string) => {
+    async (result: RimeResult, rimeKey: string, caret?: Caret) => {
       if (!('updatedSchema' in result) && result.updatedOptions) {
         control.syncOptions(result.updatedOptions)
       }
       if (result.state === 0) {
         clearComposition()
-        insert(result.committed)
+        insert(result.committed, caret)
       } else if (result.state === 1) {
         composingRef.current = true
         setPreedit({ head: result.head, body: result.body, tail: result.tail })
@@ -468,7 +487,7 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
         setPage(result.page)
         setIsLastPage(result.isLastPage)
         setComposing(true)
-        if (result.committed) insert(result.committed)
+        if (result.committed) insert(result.committed, caret)
       } else {
         clearComposition()
         if (result.state === 2 && result.updatedSchema) {
@@ -534,24 +553,28 @@ export function useRime(options: UseRimeOptions = {}): UseRime {
     },
   )
 
-  const selectCandidate = useEventCallback(
-    async (index: number) => {
+  // Post the engine call before refocusing (see refocusInput): the worker is
+  // strict FIFO, and the refocus synchronously blurs whatever held focus, so
+  // a consumer blur handler (e.g. cancel-on-blur) must not get its message in
+  // ahead of ours. The caret is captured before the refocus too, so a focus
+  // handler that moves the selection can't change where the commit lands.
+  const runEngineAction = useEventCallback(
+    async (call: (e: RimeEngine) => Promise<string>) => {
       if (!engine) return
-      const raw = await engine.selectCandidateOnCurrentPage(index)
-      await analyze(JSON.parse(raw) as RimeResult, '')
-      // Mouse selection moves focus to the clicked element; give it back to
-      // the input so the user can keep typing (my_rime refocuses likewise).
-      inputRef.current?.focus()
+      const pending = call(engine)
+      const el = inputRef.current
+      const caret = el ? { start: el.selectionStart, end: el.selectionEnd } : undefined
+      refocusInput(el)
+      await analyze(JSON.parse(await pending) as RimeResult, '', caret)
     },
   )
 
-  const changePage = useEventCallback(
-    async (backward: boolean) => {
-      if (!engine) return
-      const raw = await engine.changePage(backward)
-      await analyze(JSON.parse(raw) as RimeResult, '')
-      inputRef.current?.focus()
-    },
+  const selectCandidate = useEventCallback((index: number) =>
+    runEngineAction((e) => e.selectCandidateOnCurrentPage(index)),
+  )
+
+  const changePage = useEventCallback((backward: boolean) =>
+    runEngineAction((e) => e.changePage(backward)),
   )
 
   const getCandidateProps = useCallback(

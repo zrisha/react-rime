@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 
 // Shared, hoisted handle so the test can drive the fake engine.
@@ -420,6 +420,132 @@ describe('useRime composition', () => {
       props.onClick()
     })
     expect(result.current.text).toBe('你')
+  })
+
+  describe('refocus fallback', () => {
+    const calls: string[] = []
+    let textarea: HTMLTextAreaElement
+    let button: HTMLButtonElement
+    let focusSpy: ReturnType<typeof vi.spyOn>
+
+    beforeEach(() => {
+      calls.length = 0
+      h.processImpl = (key) => {
+        calls.push(`process:${key}`)
+        return {
+          state: 1,
+          head: '',
+          body: 'n',
+          tail: '',
+          page: 0,
+          isLastPage: true,
+          highlighted: 0,
+          candidates: [{ text: '你' }],
+        }
+      }
+      h.selectImpl = () => {
+        calls.push('select')
+        return JSON.stringify({ state: 0, committed: '你' })
+      }
+      h.changePage.mockImplementation(async () => {
+        calls.push('change')
+        return JSON.stringify({ state: 3 })
+      })
+      const realFocus = HTMLElement.prototype.focus
+      focusSpy = vi
+        .spyOn(HTMLElement.prototype, 'focus')
+        .mockImplementation(function (this: HTMLElement, opts?: FocusOptions) {
+          calls.push(`focus:${this.tagName}`)
+          realFocus.call(this, opts)
+        })
+      // jsdom's focus() only works on attached elements.
+      textarea = document.createElement('textarea')
+      button = document.createElement('button')
+      document.body.append(textarea, button)
+    })
+    afterEach(() => {
+      focusSpy.mockRestore()
+      h.changePage.mockImplementation(async () => JSON.stringify({ state: 3 }))
+      textarea.remove()
+      button.remove()
+    })
+
+    async function setup() {
+      const { result } = renderHook(() => useRime())
+      await waitFor(() => expect(result.current.ready).toBe(true))
+      result.current.getInputProps().ref(textarea)
+      const compose = () =>
+        act(async () => {
+          textarea.value = result.current.text
+          result.current.onKeyDown(kbd('n', 'KeyN'))
+        })
+      return { result, compose }
+    }
+
+    it('is a no-op when the input already has focus (the getCandidateProps path)', async () => {
+      const { result, compose } = await setup()
+      await compose()
+      textarea.focus()
+      calls.length = 0
+      await act(async () => {
+        await result.current.selectCandidate(0)
+      })
+      expect(calls).toEqual(['select'])
+    })
+
+    it('refocuses synchronously, after posting the engine call, when a button took focus', async () => {
+      const { result, compose } = await setup()
+      await compose()
+      button.focus()
+      calls.length = 0
+      // Not awaited yet: everything below must have happened synchronously,
+      // i.e. still inside the click's user gesture — and the engine message
+      // must already be queued ahead of anything the refocus triggers.
+      const pending = result.current.selectCandidate(0)
+      expect(calls).toEqual(['select', 'focus:TEXTAREA'])
+      expect(focusSpy).toHaveBeenLastCalledWith({ preventScroll: true })
+      expect(document.activeElement).toBe(textarea)
+      await act(async () => {
+        await pending
+      })
+      expect(result.current.text).toBe('你')
+
+      button.focus()
+      calls.length = 0
+      const paging = result.current.changePage(false)
+      expect(calls).toEqual(['change', 'focus:TEXTAREA'])
+      await act(async () => {
+        await paging
+      })
+    })
+
+    it('keeps a cancel-on-blur handler from getting ahead of the selection', async () => {
+      const { result, compose } = await setup()
+      button.addEventListener('blur', () => void result.current.cancelComposition())
+      await compose()
+      button.focus()
+      calls.length = 0
+      await act(async () => {
+        await result.current.selectCandidate(0)
+      })
+      expect(calls).toEqual(['select', 'focus:TEXTAREA', 'process:{Escape}'])
+      expect(result.current.text).toBe('你')
+    })
+
+    it('commits at the caret captured before the refocus, not where a focus handler moved it', async () => {
+      const { result, compose } = await setup()
+      textarea.addEventListener('focus', () => textarea.select())
+      act(() => {
+        result.current.setText('ab')
+      })
+      await compose()
+      textarea.selectionStart = textarea.selectionEnd = 1
+      button.focus()
+      await act(async () => {
+        await result.current.selectCandidate(0)
+      })
+      expect(result.current.text).toBe('a你b')
+    })
   })
 
   it('getPagingProps suppresses pointerdown focus-steal and wires onClick to changePage', async () => {

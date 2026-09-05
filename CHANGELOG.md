@@ -22,6 +22,14 @@ tracking the repo:
   enableShiftToggle: true })` — same reasoning as `F4`/`` Ctrl+` ``: it's a
   standard IME gesture but not an obvious one, and easy to trigger by
   accident. Default `false`.
+- **`selectCandidate`/`changePage` only refocus the input when it actually
+  lost focus** — previously they called `focus()` unconditionally after the
+  engine replied, which on mobile Safari scrolled the input into view on
+  every candidate tap even when focus never left (the `getCandidateProps`
+  case). When focus really was lost (a raw `onClick` wiring), the refocus now
+  happens inside the click's user gesture so iOS can re-show the keyboard,
+  works inside a shadow root, and no longer scrolls the input into view — if
+  your input can be off-screen when a candidate is tapped, scroll it yourself.
 - **ESM-only package** — the `main` field was removed; use `import`.
 - **Hooks-only: the unstyled components were removed** (`RimeTextarea`,
   `CandidatePanel`, `SchemaSelector`). `getInputProps()` makes them

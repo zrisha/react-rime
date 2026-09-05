@@ -42,7 +42,7 @@ export function Editor() {
           <ol>
             {rime.candidates.map((c, i) => (
               <li key={i}>
-                <button onClick={() => rime.selectCandidate(i)}>
+                <button {...rime.getCandidateProps(i)}>
                   {c.text}
                   {c.comment && <small> {c.comment}</small>}
                 </button>
@@ -97,14 +97,14 @@ const rime = useRime()
         key={i}
         role="option"
         aria-selected={i === rime.highlighted}
-        onClick={() => rime.selectCandidate(i)}
+        {...rime.getCandidateProps(i)}
       >
         {rime.selectLabels?.[i] ?? i + 1}. {c.text}
         {c.comment && rime.hideComment === false && <small>{c.comment}</small>}
       </button>
     ))}
-    <button disabled={rime.page === 0} onClick={() => rime.changePage(true)}>‹</button>
-    <button disabled={rime.isLastPage} onClick={() => rime.changePage(false)}>›</button>
+    <button disabled={rime.page === 0} {...rime.getPagingProps(true)}>‹</button>
+    <button disabled={rime.isLastPage} {...rime.getPagingProps(false)}>›</button>
     <button onClick={() => rime.highlightPrev()}>↑</button>
     <button onClick={() => rime.highlightNext()}>↓</button>
     <button onClick={() => rime.commitHighlighted()}>commit</button>
