@@ -258,4 +258,10 @@ factory. The engine itself is never bundled or modified.
 
 ## License
 
-AGPL-3.0-or-later, matching the upstream my-rime / RIME engine it builds on.
+AGPL-3.0-or-later.
+
+## Acknowledgments
+
+Built on [my-rime](https://github.com/LibreService/my_rime) by
+[LibreService](https://github.com/LibreService) and the [RIME](https://rime.im/)
+input-method engine.
